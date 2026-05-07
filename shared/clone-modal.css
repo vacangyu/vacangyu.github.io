@@ -24,6 +24,8 @@
   animation: gate-fade 220ms ease-out;
   padding: 16px;
   box-sizing: border-box;
+  /* 상세 페이지에서 <html style="visibility:hidden"> 상태여도 모달은 항상 보이도록 */
+  visibility: visible !important;
 }
 @keyframes gate-fade { from { opacity: 0 } to { opacity: 1 } }
 

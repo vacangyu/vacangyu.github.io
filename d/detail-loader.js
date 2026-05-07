@@ -135,6 +135,15 @@
     });
   };
 
+  // "OO의 판매 물품" 헤더는 한 덩어리 텍스트로 합성. (a 태그가 display:flex라
+  // span/text 노드를 분리하면 사이에 gap 12px이 들어가 보이는 문제 회피.)
+  const setSellerArticlesTitle = (data) => {
+    document.querySelectorAll('[data-bind="seller-articles-title"]').forEach((el) => {
+      const name = String(data["seller-name"] || "").trim() || "판매자";
+      el.textContent = `${name}의 판매 물품`;
+    });
+  };
+
   const setMannerBar = (data) => {
     const bar = document.querySelector('[data-bind="manner-bar"]');
     if (!bar) return;
@@ -158,13 +167,24 @@
     bindText("seller-region", data["seller-region"]);
     bindText("manner-temp", data["manner-temp"]);
     setMannerBar(data);
+    setSellerArticlesTitle(data);
     setMeta(data);
     setCarousel(data);
   };
 
+  // 페이지 첫 렌더에서 레퍼런스 텍스트가 잠깐 보이는 걸 막기 위해
+  // <html style="visibility:hidden">으로 시작하고, .md 적용 완료 후 풀어줌.
+  // 어떤 이유로든 적용이 막혀 영원히 안 보이는 사고를 막기 위해 3초 타임아웃 fallback.
+  const reveal = () => {
+    document.documentElement.style.visibility = "";
+  };
+  const revealTimeout = setTimeout(reveal, 3000);
+
   document.addEventListener("DOMContentLoaded", async () => {
     if (typeof window.parseMd !== "function") {
       console.warn("[detail-loader] window.parseMd is not defined; check md-loader.js load order");
+      clearTimeout(revealTimeout);
+      reveal();
       return;
     }
     try {
@@ -177,6 +197,10 @@
     } catch (error) {
       console.warn("[detail-loader] md fetch failed:", error);
       await setProfileImage();
+    } finally {
+      clearTimeout(revealTimeout);
+      // requestAnimationFrame 한 프레임 기다려 DOM 업데이트가 첫 paint에 반영된 뒤 reveal
+      requestAnimationFrame(reveal);
     }
   });
 })();
