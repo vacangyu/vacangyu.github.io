@@ -1,0 +1,125 @@
+/* Clone-site password gate — Claude-style modern */
+:root {
+  --gate-bg: #ffffff;
+  --gate-text: #1a1a1a;
+  --gate-text-muted: #6b6b6b;
+  --gate-border: #e5e5e5;
+  --gate-border-focus: #cc785c;
+  --gate-accent: #cc785c;
+  --gate-accent-hover: #b66449;
+  --gate-error: #d63b3b;
+  --gate-shadow: 0 24px 60px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.clone-gate-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(20, 18, 16, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2147483646;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+               "Apple SD Gothic Neo", "Noto Sans KR", "Pretendard", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  animation: gate-fade 220ms ease-out;
+  padding: 16px;
+  box-sizing: border-box;
+}
+@keyframes gate-fade { from { opacity: 0 } to { opacity: 1 } }
+
+.clone-gate-card {
+  background: var(--gate-bg);
+  border-radius: 20px;
+  padding: 32px 32px 26px;
+  width: 100%;
+  max-width: 380px;
+  text-align: left;
+  box-shadow: var(--gate-shadow);
+  animation: gate-pop 280ms cubic-bezier(.2,.85,.3,1.05);
+  box-sizing: border-box;
+}
+@keyframes gate-pop {
+  from { transform: translateY(16px) scale(.96); opacity: 0 }
+  to   { transform: translateY(0) scale(1); opacity: 1 }
+}
+
+.clone-gate-card.shake { animation: gate-shake 420ms cubic-bezier(.36,.07,.19,.97); }
+@keyframes gate-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+}
+
+.clone-gate-title {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--gate-text);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  margin: 0 0 6px;
+}
+.clone-gate-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--gate-text-muted);
+  line-height: 1.55;
+  margin: 0 0 20px;
+}
+
+.clone-gate-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  color: var(--gate-text);
+  background: #fafafa;
+  border: 1px solid var(--gate-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  box-sizing: border-box;
+  ime-mode: active;
+}
+.clone-gate-input:focus {
+  border-color: var(--gate-border-focus);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(204,120,92,0.18);
+}
+.clone-gate-input.is-error {
+  border-color: var(--gate-error);
+  box-shadow: 0 0 0 3px rgba(214,59,59,0.16);
+}
+
+.clone-gate-error-msg {
+  font-size: 13px;
+  color: var(--gate-error);
+  margin: 8px 2px 0;
+  height: 16px;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.clone-gate-error-msg.shown { opacity: 1; }
+
+.clone-gate-btn {
+  appearance: none; border: 0; cursor: pointer;
+  background: var(--gate-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px; font-weight: 600;
+  padding: 12px 18px;
+  border-radius: 10px;
+  width: 100%;
+  margin-top: 14px;
+  transition: background 140ms ease, transform 80ms ease, opacity 140ms ease;
+}
+.clone-gate-btn:hover { background: var(--gate-accent-hover); }
+.clone-gate-btn:active { transform: scale(.98); }
+.clone-gate-btn:disabled { opacity: 0.6; cursor: progress; }
+
+.clone-confetti-canvas {
+  position: fixed; inset: 0; pointer-events: none;
+  z-index: 2147483647;
+}

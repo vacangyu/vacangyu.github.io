@@ -1,0 +1,148 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  overflow: hidden;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+.capture-shell {
+  width: 100vw;
+  height: 100dvh;
+  background: #fff;
+}
+
+.capture-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.search-panel {
+  width: 100vw;
+  height: 100dvh;
+  background: #fff;
+  color: #202124;
+  font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+.search-panel[hidden],
+.capture-frame[hidden] {
+  display: none;
+}
+
+.search-panel-top {
+  height: 49px;
+  border-bottom: 1px solid #dadce0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 0 6px 0 6px;
+  box-sizing: border-box;
+}
+
+.search-back {
+  width: 44px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: #3367d6;
+  padding: 0;
+}
+
+.search-back svg,
+.panel-action svg,
+.suggestion-icon svg,
+.suggestion-fill svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: auto;
+  fill: currentColor;
+}
+
+.panel-input {
+  border: 0;
+  outline: 0;
+  min-width: 0;
+  width: 100%;
+  height: 48px;
+  color: #202124;
+  background: transparent;
+  font: 16px/48px Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+.panel-actions {
+  display: grid;
+  grid-template-columns: 44px 44px;
+  align-items: center;
+}
+
+.panel-actions.has-query {
+  grid-template-columns: 44px;
+}
+
+.panel-action {
+  width: 44px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: #70757a;
+  padding: 0;
+}
+
+.panel-actions .search-clear,
+.panel-actions.has-query .search-mic,
+.panel-actions.has-query .search-lens {
+  display: none;
+}
+
+.panel-actions.has-query .search-clear {
+  display: block;
+}
+
+.suggestion-list {
+  padding-top: 6px;
+}
+
+.suggestion-row {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  background: #fff;
+  color: #202124;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 44px;
+  align-items: center;
+  padding: 0 8px 0 5px;
+  text-align: left;
+  font: 16px/1.25 Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+.suggestion-icon {
+  color: #9aa0a6;
+  text-align: center;
+}
+
+.suggestion-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.suggestion-row.history .suggestion-label {
+  font-weight: 600;
+}
+
+.suggestion-fill {
+  color: #70757a;
+  text-align: center;
+}
