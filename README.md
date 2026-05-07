@@ -20,17 +20,23 @@ site/
 ```bash
 chmod +x serve.sh
 ./serve.sh
-# 그 후 http://localhost:8080/d/검색목록.html
-# 상세 페이지:
-# http://localhost:8080/d/검색결과%201.html
-# http://localhost:8080/d/검색결과%202.html
-# 검색사이트:
-# http://localhost:8080/g/
+# 중고거래 (목록):  http://localhost:8080/d/
+# 상세 페이지:      http://localhost:8080/d/product-1.html
+#                  http://localhost:8080/d/product-2.html
+# 검색사이트:       http://localhost:8080/g/
 
 # 같은 Wi-Fi 휴대폰/다른 기기:
-# http://192.168.0.24:8080/d/검색목록.html
+# http://192.168.0.24:8080/d/
 # http://192.168.0.24:8080/g/
 ```
+
+## 콘텐츠 편집
+
+- 상품 1 텍스트:    `d/product-1.md`
+- 상품 2 텍스트:    `d/product-2.md`
+- 상품 1 이미지:    `d/images/product-1/1.jpeg`(여러 장이면 `2.jpeg, 3.jpeg…` 추가 후 .md `images:` 갱신)
+- 상품 2 이미지:    `d/images/product-2/`
+- 검색 기록 목록:   `g/search-history.md`
 
 `python3 -m http.server 8080` 서버 하나로 `/d`와 `/g`를 동시에 확인할 수 있다. 두 주소를 서로 다른 브라우저 탭/기기에서 열면 된다.
 

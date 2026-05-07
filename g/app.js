@@ -54,7 +54,7 @@
   async function loadData() {
     try {
       const [historyRes, autoRes] = await Promise.all([
-        fetch("기존 검색 기록.md", { cache: "no-store" }),
+        fetch("search-history.md", { cache: "no-store" }),
         fetch("autocomplete.json", { cache: "no-store" })
       ]);
       if (historyRes.ok) {
@@ -109,8 +109,50 @@
     return value;
   }
 
+  // 한글 음절 → 초성 한 글자. 자모(ㄱㅂ 등)는 그대로.
+  function chosungOf(ch) {
+    if (!ch) return "";
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const idx = code - 0xAC00;
+      const choIdx = Math.floor(idx / 28 / 21);
+      return ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"][choIdx] || "";
+    }
+    return ch;
+  }
+
+  // 한글 호환 자모(ㄱ~ㅎ)의 단일 글자인지
+  function isStandaloneJamo(text) {
+    if (!text || text.length !== 1) return false;
+    const code = text.charCodeAt(0);
+    return code >= 0x3131 && code <= 0x314E;
+  }
+
+  function startsWithBeop(item) {
+    return chosungOf(String(item || "").trim().charAt(0)) === "ㅂ";
+  }
+
+  // history 항목 ↔ query 매칭
+  //  - 단일 자모 query (예: "ㅂ") → 첫 글자 초성 동일
+  //  - 그 외 → 일반 prefix 매칭 (예: "베", "벤자민")
+  function historyMatchesQuery(item, query) {
+    const q = String(query || "").trim();
+    if (!q) return true;
+    if (isStandaloneJamo(q)) return chosungOf(item.charAt(0)) === q;
+    return item.startsWith(q);
+  }
+
+  // 빈 입력 시 표시 정렬: ㅂ 시작 항목을 마지막으로
+  function arrangedHistory(allHistory) {
+    const non = allHistory.filter((h) => !startsWithBeop(h));
+    const yes = allHistory.filter((h) => startsWithBeop(h));
+    return [...non, ...yes];
+  }
+
   function kindForQuery(query) {
     const value = normalizeForSuggest(query);
+    // ㅂ 단일 자모는 walter 분기로 보내 walter의 'ㅂ' 단계 자동완성을 사용
+    if (value === "ㅂ") return "walter";
     if (value.includes("발터") || value.includes("벤야민") || value.startsWith("발") || value.startsWith("바")) return "walter";
     if (value.includes("벤자민") || value.startsWith("벤") || value.startsWith("베")) return "benjamin";
     return state.kind || "benjamin";
@@ -141,12 +183,21 @@
 
   function suggestionsFor(query) {
     const value = String(query || "").trim();
+    const allHistory = unique([...data.performed, ...data.histories]);
+
     if (!value) {
-      return unique([...data.performed, ...data.histories]).map((label) => ({ label, type: "history" }));
+      // 빈 입력: 모든 기록, 단 ㅂ 시작 항목은 아래로
+      return arrangedHistory(allHistory).map((label) => ({ label, type: "history" }));
     }
 
+    // 입력 진행 중: 매칭되는 history만 위에 + 그 아래 자동완성
+    const matchedHistory = allHistory.filter((h) => historyMatchesQuery(h, value));
+    const historyRows = matchedHistory.map((label) => ({ label, type: "history" }));
+
     const { stage } = stageFor(value);
-    return unique(stage.suggestions || []).map((label) => ({ label, type: "suggestion" }));
+    const suggestRows = unique(stage.suggestions || []).map((label) => ({ label, type: "suggestion" }));
+
+    return [...historyRows, ...suggestRows];
   }
 
   function suggestionRows(query) {

@@ -1,4 +1,4 @@
-// 검색목록 product card loader — pulls per-card text/image from 검색결과 N.md
+// Listing card loader — pulls per-card text/image from product-N.md
 (function () {
   function applyToCard(idx, data) {
     var root = document.querySelector('[data-card-index="' + idx + '"]');
@@ -21,7 +21,7 @@
     setBind('time', timeText.trim() || '방금 전');
     // Listing thumbnail uses the first image from manifest
     if (data.images && data.images.length > 0) {
-      var imgPath = 'images/result' + idx + '/' + data.images[0];
+      var imgPath = 'images/product-' + idx + '/' + data.images[0];
       setBind('image', imgPath);
     }
   }
@@ -29,7 +29,7 @@
   async function load() {
     for (var i = 1; i <= 2; i++) {
       try {
-        var res = await fetch('검색결과 ' + i + '.md', { cache: 'no-store' });
+        var res = await fetch('product-' + i + '.md', { cache: 'no-store' });
         if (!res.ok) continue;
         var text = await res.text();
         var data = window.parseMd ? window.parseMd(text) : {};

@@ -1,8 +1,8 @@
 (function () {
-  const pageMatch = decodeURIComponent(location.pathname).match(/검색결과\s*([12])\.html$/);
+  const pageMatch = decodeURIComponent(location.pathname).match(/product-([12])\.html$/);
   const pageIndex = pageMatch ? pageMatch[1] : "1";
-  const mdPath = `검색결과 ${pageIndex}.md`;
-  const imageBase = `images/result${pageIndex}/`;
+  const mdPath = `product-${pageIndex}.md`;
+  const imageBase = `images/product-${pageIndex}/`;
 
   const text = (value, fallback = "") => {
     if (value === undefined || value === null || value === "") return fallback;
