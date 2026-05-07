@@ -13,3 +13,7 @@
 # Logs / temp
 *.log
 *.tmp
+
+# sed/edit backup files (sandbox cannot delete; just don't push them)
+*.bak
+*.bak[0-9]

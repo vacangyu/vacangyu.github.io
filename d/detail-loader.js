@@ -12,6 +12,8 @@
   const bindText = (key, value) => {
     document.querySelectorAll(`[data-bind="${key}"]`).forEach((el) => {
       el.textContent = text(value, el.textContent);
+      // 본문 줄바꿈 보존 (당근 SingleFile의 부모 요소 white-space에 의존하지 않도록)
+      if (key === "body") el.style.whiteSpace = "pre-line";
     });
   };
 
@@ -82,9 +84,18 @@
     const slides = Array.from(container.querySelectorAll("img._1wus0xp0"));
     let active = 0;
     const dots = document.querySelector("ol._1wus0xpa");
+    const prevBtn = document.querySelector('[aria-label="Previous item"]');
+    const nextBtn = document.querySelector('[aria-label="Next item"]');
+    const single = slides.length <= 1;
+
+    if (single) {
+      if (dots) dots.style.display = "none";
+      if (prevBtn) prevBtn.style.display = "none";
+      if (nextBtn) nextBtn.style.display = "none";
+    }
 
     const renderDots = () => {
-      if (!dots) return;
+      if (!dots || single) return;
       dots.innerHTML = slides.map((_, index) => (
         `<li class="_1wus0xpb sprinkles_display_flex_base__1byufe82i sprinkles_justifyContent_center_base__1byufe8su">` +
         `<button type="button" aria-label="Carousel indicator" data-carousel-dot="${index}" class="_1wus0xpc sprinkles_display_block_base__1byufe826 sprinkles_overflow_hidden__1byufe819 sprinkles_width_1.5_base__1byufe84i sprinkles_height_1.5_base__1byufe86m sprinkles_cursor_pointer__1byufe81o${index === 0 ? " _1wus0xpd" : ""}"></button></li>`
@@ -124,6 +135,16 @@
     });
   };
 
+  const setMannerBar = (data) => {
+    const bar = document.querySelector('[data-bind="manner-bar"]');
+    if (!bar) return;
+    const temp = parseFloat(data["manner-temp"]);
+    if (!Number.isFinite(temp)) return;
+    // 당근 게이지는 매너온도 값과 거의 비례 (39.4°C → 39.8%). 단순화하여 동일 % 사용.
+    const pct = Math.max(0, Math.min(99.9, temp));
+    bar.style.width = pct + "%";
+  };
+
   const applyData = (data) => {
     bindText("title", data.title);
     bindText("category", data.category);
@@ -136,19 +157,25 @@
     bindText("seller-name", data["seller-name"]);
     bindText("seller-region", data["seller-region"]);
     bindText("manner-temp", data["manner-temp"]);
+    setMannerBar(data);
     setMeta(data);
     setCarousel(data);
   };
 
   document.addEventListener("DOMContentLoaded", async () => {
-    if (typeof window.parseMd !== "function") return;
+    if (typeof window.parseMd !== "function") {
+      console.warn("[detail-loader] window.parseMd is not defined; check md-loader.js load order");
+      return;
+    }
     try {
-      const res = await fetch(mdPath);
-      if (!res.ok) throw new Error(`${mdPath} not found`);
-      applyData(window.parseMd(await res.text()));
+      const res = await fetch(mdPath, { cache: "no-store" });
+      if (!res.ok) throw new Error(`${mdPath} HTTP ${res.status}`);
+      const data = window.parseMd(await res.text());
+      console.info("[detail-loader] loaded", mdPath, data);
+      applyData(data);
       await setProfileImage();
     } catch (error) {
-      console.warn("[detail-loader]", error);
+      console.warn("[detail-loader] md fetch failed:", error);
       await setProfileImage();
     }
   });

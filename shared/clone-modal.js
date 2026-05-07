@@ -114,12 +114,18 @@
     card.appendChild(ce('p', 'clone-gate-sub', '비밀번호를 입력하세요'));
 
     var input = ce('input', 'clone-gate-input');
-    input.type = 'password';
+    // text type so the mobile keyboard isn't forced into the password layout
+    // (which on some Korean phones blocks 한글 자판 toggle).
+    input.type = 'text';
     input.autocomplete = 'off';
+    input.autocapitalize = 'off';
+    input.autocorrect = 'off';
     input.spellcheck = false;
     input.setAttribute('lang', 'ko');
     input.setAttribute('inputmode', 'text');
+    input.setAttribute('enterkeyhint', 'go');
     input.setAttribute('aria-label', '비밀번호');
+    input.setAttribute('name', 'gate-passphrase');
     card.appendChild(input);
 
     var err = ce('div', 'clone-gate-error-msg', '비밀번호가 일치하지 않습니다.');
