@@ -142,11 +142,18 @@
     return item.startsWith(q);
   }
 
-  // 빈 입력 시 표시 정렬: ㅂ 시작 항목을 마지막으로
-  function arrangedHistory(allHistory) {
-    const non = allHistory.filter((h) => !startsWithBeop(h));
-    const yes = allHistory.filter((h) => startsWithBeop(h));
-    return [...non, ...yes];
+  // 빈 입력 시 표시 정렬:
+  //   1) performed (촬영 중 검색한 '벤자민 버튼'/'발터 벤야민') — 최신순 그대로 맨 위
+  //   2) histories(.md) 중 ㅂ 시작 아닌 것
+  //   3) histories(.md) 중 ㅂ 시작
+  // 이미 performed 안의 항목이 histories에도 있으면 중복 제거.
+  function arrangedHistory() {
+    const performed = unique(data.performed);
+    const performedSet = new Set(performed);
+    const baseHistory = unique(data.histories).filter((h) => !performedSet.has(h));
+    const nonB = baseHistory.filter((h) => !startsWithBeop(h));
+    const yesB = baseHistory.filter((h) => startsWithBeop(h));
+    return [...performed, ...nonB, ...yesB];
   }
 
   function kindForQuery(query) {
@@ -183,14 +190,15 @@
 
   function suggestionsFor(query) {
     const value = String(query || "").trim();
-    const allHistory = unique([...data.performed, ...data.histories]);
 
     if (!value) {
-      // 빈 입력: 모든 기록, 단 ㅂ 시작 항목은 아래로
-      return arrangedHistory(allHistory).map((label) => ({ label, type: "history" }));
+      // 빈 입력: performed 최상단 → ㅂ 아닌 .md → ㅂ 시작 .md
+      return arrangedHistory().map((label) => ({ label, type: "history" }));
     }
 
     // 입력 진행 중: 매칭되는 history만 위에 + 그 아래 자동완성
+    // (performed도 기록이므로 매칭 대상에 포함)
+    const allHistory = unique([...data.performed, ...data.histories]);
     const matchedHistory = allHistory.filter((h) => historyMatchesQuery(h, value));
     const historyRows = matchedHistory.map((label) => ({ label, type: "history" }));
 
