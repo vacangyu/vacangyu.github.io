@@ -2305,6 +2305,7 @@ function captureSelPresence() {
     return { f: key.f, cut: key.cut, block: key.block, nth, s, e };
   } catch (err) { return null; }
 }
+let presenceLastSig = '';
 function sendPresence() {
   if (cloudRole !== 'editor' || !fb) return;
   const z = zoomFactor();
@@ -2315,11 +2316,18 @@ function sendPresence() {
     const pr = pagesEl.getBoundingClientRect();
     m = { x: Math.round((mouseClient.x - pr.left) / z), y: Math.round((mouseClient.y - pr.top) / z) };
   }
-  presenceLast = Date.now();
-  boardRef('presence/editor').set({
+  const p = {
     ty: Math.round(ty), cy: Math.round(cy), z: Math.round(z * 100),
-    film: currentFilm, ts: Date.now(), m, car: captureSelPresence()
-  }).catch(() => {});
+    film: currentFilm, m, car: captureSelPresence()
+  };
+  /* 내용이 그대로면 전송 생략 — 신선도(25초 창) 유지를 위한 하트비트만 통과 */
+  const sig = JSON.stringify(p);
+  const now = Date.now();
+  if (sig === presenceLastSig && now - presenceLast < 4500) return;
+  presenceLastSig = sig;
+  presenceLast = now;
+  p.ts = now;
+  boardRef('presence/editor').set(p).catch(() => {});
 }
 function publishPresence() {
   if (cloudRole !== 'editor') return;
@@ -2566,6 +2574,7 @@ async function enterEditorMode() {
     boardRef('presence/editor').onDisconnect().remove();
     if (presenceTimer) clearInterval(presenceTimer);
     presenceTimer = setInterval(sendPresence, 5000);
+    presenceLastSig = '';
     sendPresence();
   } catch (e) {}
   renderAll(false);
