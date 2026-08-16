@@ -2308,6 +2308,7 @@ function captureSelPresence() {
 let presenceLastSig = '';
 function sendPresence() {
   if (cloudRole !== 'editor' || !fb) return;
+  if (composing) return; /* 한글 IME 조합 중에는 레이아웃 강제·전송 금지 — compositionend에서 재개 */
   const z = zoomFactor();
   const ty = editorScroll.scrollTop / z;
   const cy = (editorScroll.scrollTop + editorScroll.clientHeight / 2) / z;
@@ -2329,13 +2330,14 @@ function sendPresence() {
   p.ts = now;
   boardRef('presence/editor').set(p).catch(() => {});
 }
+/* 이벤트 핸들러 안에서 동기 실행하지 않고 항상 타이머로 미룬다 —
+   selectionchange/mousemove는 타이핑·조합 중에도 연발되므로, 입력 경로에서
+   리플로우(getBoundingClientRect)·Range 순회가 돌면 한글 IME가 끊긴다 */
 function publishPresence() {
   if (cloudRole !== 'editor') return;
-  if (Date.now() - presenceLast > 120) sendPresence();
-  else {
-    clearTimeout(presencePending);
-    presencePending = setTimeout(sendPresence, 130);
-  }
+  if (presencePending) return;
+  const wait = Math.max(40, 120 - (Date.now() - presenceLast));
+  presencePending = setTimeout(() => { presencePending = null; sendPresence(); }, wait);
 }
 editorScroll.addEventListener('mousemove', e => {
   if (cloudRole !== 'editor') return;
@@ -2348,6 +2350,8 @@ editorScroll.addEventListener('mouseleave', () => {
   publishPresence();
 });
 document.addEventListener('selectionchange', () => publishPresence());
+/* 조합이 끝나면 밀렸던 캐럿 위치를 전송 (pagesEl의 compositionend가 먼저 실행돼 composing=false) */
+document.addEventListener('compositionend', () => publishPresence());
 function updateFollowUI() {
   const show = isViewer() && presenceFresh;
   $('#b-follow').style.display = show ? '' : 'none';
