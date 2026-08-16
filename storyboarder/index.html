@@ -55,6 +55,20 @@ body.viewer .thumb{cursor:pointer}
 .mbtns{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
 .mprimary{background:#18181b;color:#fff}
 .mprimary:hover{background:#3f3f46}
+/* ---------- 편집자 따라가기 (스포트라이트) ---------- */
+#follow-frame{position:fixed;inset:0;pointer-events:none;z-index:150;display:none;box-shadow:inset 0 0 0 3px #16a34a}
+body.following #follow-frame{display:block}
+#follow-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:151;background:#16a34a;color:#fff;border:none;border-radius:999px;height:30px;padding:0 16px;font-size:12.5px;display:none;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(22,163,74,.35)}
+body.following #follow-pill{display:block}
+#follow-pill:hover{background:#15803d}
+#b-follow-lock.on{color:#16a34a;font-weight:700}
+/* ---------- 부트 로딩 오버레이 ---------- */
+#boot-overlay{position:fixed;inset:0;background:#fff;z-index:400;display:flex;align-items:center;justify-content:center}
+#boot-overlay[hidden]{display:none}
+.bootbox{text-align:center}
+.bootlogo{font-size:18px;font-weight:700;color:#18181b;letter-spacing:-.01em;margin-bottom:14px}
+.bootspin{width:22px;height:22px;border:2.5px solid #e4e4e7;border-top-color:#18181b;border-radius:50%;margin:0 auto;animation:bspin .8s linear infinite}
+@keyframes bspin{to{transform:rotate(360deg)}}
 .lbl{font-size:13px;color:#18181b;margin:0 2px 0 6px;white-space:nowrap}
 .cast{width:110px;border:none;background:#f4f4f5;border-radius:6px;height:28px;padding:0 9px;font-size:13px;font-family:inherit;color:#18181b}
 .cast:focus{outline:1px solid #d4d4d8}
@@ -157,7 +171,7 @@ tr.mrow .mcell{min-height:14mm}
 /* ---------- 인쇄 ---------- */
 @media print{
   body{display:block;background:#fff;overflow:visible}
-  #topbar,#sidebar,#rowtools,#toast,#measure,.noprint{display:none !important}
+  #topbar,#sidebar,#rowtools,#toast,#measure,#follow-frame,#follow-pill,#boot-overlay,#login-modal,.noprint{display:none !important}
   #main{display:block}
   #editor-scroll{overflow:visible}
   #pages{display:block;padding:0;margin:0;width:auto;gap:0;zoom:1 !important}
@@ -233,6 +247,8 @@ tr.mrow .mcell{min-height:14mm}
     <div class="sep"></div>
     <button class="fbtn eo" id="b-ori" title="전체 페이지 방향 일괄 전환"></button>
     <div class="grow"></div>
+    <button class="mbtn" id="b-follow" style="display:none" title="편집자가 지금 보고 있는 위치로 이동">편집자 위치로</button>
+    <button class="mbtn" id="b-follow-lock" style="display:none" title="편집자를 계속 따라가기 (스포트라이트)">고정</button>
     <span id="sync-status" style="display:none;font-size:12px;margin:0 6px;white-space:nowrap"></span>
     <button class="mbtn" id="b-login" style="display:none">로그인</button>
     <input type="range" id="zoom" min="40" max="160" value="100" title="화면 확대/축소">
@@ -240,6 +256,10 @@ tr.mrow .mcell{min-height:14mm}
     <button class="mbtn" id="b-fit" title="페이지 너비를 창에 맞춤">맞춤</button>
   </div>
 </header>
+
+<div id="follow-frame"></div>
+<button id="follow-pill">편집자를 따라가는 중 · 클릭하여 중지</button>
+<div id="boot-overlay" hidden><div class="bootbox"><div class="bootlogo">Storyboarder</div><div class="bootspin"></div></div></div>
 
 <div id="login-modal" class="modalwrap" hidden>
   <div class="modal">
@@ -1338,6 +1358,7 @@ function switchFilm(name) {
   updatePageStyle();
   renderAll(false);
   editorScroll.scrollTop = 0;
+  if (cloudRole === 'editor') publishPresence();
 }
 
 /* ---------- 현재 상태를 내장한 HTML 내보내기 ---------- */
@@ -2066,6 +2087,7 @@ function setZoom(v) {
   z.style.setProperty('--zpct', ((Math.min(160, Math.max(40, v)) - 40) / 120 * 100) + '%');
   $('#zoom-val').textContent = v + '%';
   hideRowtools();
+  if (cloudRole === 'editor') publishPresence();
 }
 $('#zoom').addEventListener('input', e => setZoom(+e.target.value));
 $('#b-fit').addEventListener('click', () => {
@@ -2235,6 +2257,68 @@ async function restoreDoc(docJson) {
   }
   return docJson.replace(/ref:([0-9a-f]{24})/g, (s, h) => imgCache.get(h) || s);
 }
+function bootDone() {
+  const o = $('#boot-overlay');
+  if (o) o.hidden = true;
+}
+/* ---------- 편집자 위치 공유 / 따라가기 ---------- */
+let presenceTimer = null;
+let presenceLast = 0;
+let presencePending = null;
+let followMode = false;
+let followTarget = null;   /* {cy, film} — 문서 좌표계(줌 1 기준) 화면 중심 Y */
+let presenceFresh = false;
+let followRaf = null;
+function sendPresence() {
+  if (cloudRole !== 'editor' || !fb) return;
+  const z = parseFloat(pagesEl.style.zoom || '1') || 1;
+  const cy = (editorScroll.scrollTop + editorScroll.clientHeight / 2) / z;
+  presenceLast = Date.now();
+  boardRef('presence/editor').set({ cy: Math.round(cy), film: currentFilm, ts: Date.now() }).catch(() => {});
+}
+function publishPresence() {
+  if (cloudRole !== 'editor') return;
+  if (Date.now() - presenceLast > 250) sendPresence();
+  else {
+    clearTimeout(presencePending);
+    presencePending = setTimeout(sendPresence, 280);
+  }
+}
+function updateFollowUI() {
+  const show = isViewer() && presenceFresh;
+  $('#b-follow').style.display = show ? '' : 'none';
+  $('#b-follow-lock').style.display = show ? '' : 'none';
+}
+function setFollow(on) {
+  followMode = on;
+  document.body.classList.toggle('following', on);
+  $('#b-follow-lock').classList.toggle('on', on);
+  if (on) { if (!followRaf) followTick(); }
+  else if (followRaf) { cancelAnimationFrame(followRaf); followRaf = null; }
+}
+function followTick() {
+  followRaf = requestAnimationFrame(followTick);
+  if (!followMode || !followTarget) return;
+  if (followTarget.film && followTarget.film !== currentFilm && films[followTarget.film]) switchFilm(followTarget.film);
+  const z = parseFloat(pagesEl.style.zoom || '1') || 1;
+  const want = followTarget.cy * z - editorScroll.clientHeight / 2;
+  const max = Math.max(0, editorScroll.scrollHeight - editorScroll.clientHeight);
+  const target = Math.max(0, Math.min(max, want));
+  const d = target - editorScroll.scrollTop;
+  if (Math.abs(d) > 0.6) editorScroll.scrollTop = editorScroll.scrollTop + d * 0.16; /* 부드러운 감쇠 이동 */
+}
+function jumpToEditor() {
+  if (!followTarget) return;
+  if (followTarget.film && followTarget.film !== currentFilm && films[followTarget.film]) switchFilm(followTarget.film);
+  const z = parseFloat(pagesEl.style.zoom || '1') || 1;
+  const want = followTarget.cy * z - editorScroll.clientHeight / 2;
+  editorScroll.scrollTo({ top: Math.max(0, want), behavior: 'smooth' });
+}
+$('#b-follow').addEventListener('click', jumpToEditor);
+$('#b-follow-lock').addEventListener('click', () => setFollow(!followMode));
+$('#follow-pill').addEventListener('click', () => setFollow(false));
+editorScroll.addEventListener('scroll', publishPresence);
+
 function setSyncStatus(s) {
   const el = $('#sync-status');
   el.style.display = '';
@@ -2273,6 +2357,7 @@ function applyRemote(fullJson) {
 function enterViewerMode() {
   cloudRole = 'viewer';
   document.body.classList.add('viewer');
+  if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
   $('#b-login').textContent = '로그인';
   setSyncStatus('viewer');
   renderAll(false);
@@ -2280,10 +2365,30 @@ function enterViewerMode() {
   const handler = ref.on('value', async snap => {
     if (cloudRole !== 'viewer') return;
     const t = snap.val();
-    if (!t) return;
+    if (!t) { bootDone(); return; }
     try { applyRemote(await restoreDoc(t)); } catch (e) {}
+    bootDone();
   });
-  viewerUnsub = () => ref.off('value', handler);
+  const pref = boardRef('presence/editor');
+  const ph = pref.on('value', snap => {
+    if (cloudRole !== 'viewer') return;
+    const v = snap.val();
+    if (v && Date.now() - (v.ts || 0) < 25000) {
+      followTarget = { cy: v.cy || 0, film: v.film };
+      presenceFresh = true;
+    } else {
+      presenceFresh = false;
+      if (followMode) setFollow(false);
+    }
+    updateFollowUI();
+  });
+  viewerUnsub = () => {
+    ref.off('value', handler);
+    pref.off('value', ph);
+    setFollow(false);
+    presenceFresh = false;
+    updateFollowUI();
+  };
 }
 async function enterEditorMode() {
   if (viewerUnsub) { viewerUnsub(); viewerUnsub = null; }
@@ -2296,6 +2401,15 @@ async function enterEditorMode() {
     else publishNow(); /* 클라우드가 비어 있으면 현재 문서를 최초 발행 */
     setSyncStatus('saved');
   } catch (e) { setSyncStatus('error'); }
+  bootDone();
+  setFollow(false);
+  updateFollowUI();
+  try {
+    boardRef('presence/editor').onDisconnect().remove();
+    if (presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = setInterval(sendPresence, 5000);
+    sendPresence();
+  } catch (e) {}
   renderAll(false);
 }
 async function doLogin() {
@@ -2314,11 +2428,11 @@ async function cloudInit() {
     await loadScript('https://www.gstatic.com/firebasejs/' + V + '/firebase-app-compat.js');
     await loadScript('https://www.gstatic.com/firebasejs/' + V + '/firebase-auth-compat.js');
     await loadScript('https://www.gstatic.com/firebasejs/' + V + '/firebase-database-compat.js');
-  } catch (e) { toast('클라우드 연결 실패 — 로컬 모드로 동작합니다'); return; }
+  } catch (e) { bootDone(); toast('클라우드 연결 실패 — 로컬 모드로 동작합니다'); return; }
   try {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
     fb = { app, auth: firebase.auth(), db: firebase.database() };
-  } catch (e) { toast('Firebase 설정 오류'); return; }
+  } catch (e) { bootDone(); toast('Firebase 설정 오류'); return; }
   $('#b-login').style.display = '';
   fb.auth.onAuthStateChanged(user => {
     if (user) enterEditorMode();
@@ -2337,6 +2451,11 @@ $('#li-go').addEventListener('click', doLogin);
 $('#li-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 /* ---------- 초기화 ---------- */
+if (FIREBASE_CONFIG) {
+  /* 클라우드 문서가 준비될 때까지 내장 문서가 보이지 않도록 로딩 화면 표시 */
+  $('#boot-overlay').hidden = false;
+  setTimeout(bootDone, 9000);
+}
 syncFontUI();
 buildFilmMenu();
 applyDocVars();
@@ -2360,6 +2479,10 @@ window.__sb = {
     stripDoc, restoreDoc,
     get role() { return cloudRole; },
     setRole(r) { cloudRole = r; document.body.classList.toggle('viewer', r === 'viewer'); renderAll(false); }
+  },
+  follow: {
+    setFollow, jump: jumpToEditor,
+    setTarget(t) { followTarget = t; presenceFresh = true; updateFollowUI(); }
   },
   setOrientation(o) { doc.settings.orientation = o; updatePageStyle(); renderAll(false); }
 };
