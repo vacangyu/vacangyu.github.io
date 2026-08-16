@@ -2255,6 +2255,7 @@ async function publishNow() {
     }
     await boardRef('doc').set(docJson);
     await boardRef('meta').set({ updatedAt: Date.now(), current: currentFilm });
+    dirty = false; /* 클라우드 저장 완료 = 저장된 상태 (창 닫기 경고 해제) */
     setSyncStatus('saved');
   } catch (e) {
     setSyncStatus('error');
@@ -2341,6 +2342,7 @@ buildFilmMenu();
 applyDocVars();
 updatePageStyle();
 renderAll(false);
+cloudInit();
 
 /* 클로드/샌드박스 미리보기 환경 안내 */
 if (window.self !== window.top) {
