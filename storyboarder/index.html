@@ -88,6 +88,9 @@ body.following #follow-pill{display:block}
 #zoom::-moz-range-progress,.vzoom input::-moz-range-progress{height:4px;border-radius:999px;background:#18181b}
 #zoom::-moz-range-thumb,.vzoom input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#fff;border:1.5px solid #18181b}
 #zoom-val{font-size:11px;color:#71717a;min-width:34px;text-align:right}
+#b-zoom{min-width:52px;font-variant-numeric:tabular-nums}
+.zoomrow{display:flex;align-items:center;gap:8px;padding:4px 10px 8px}
+.zoomrow input{flex:1}
 .selbtn{display:inline-flex;align-items:center;gap:5px}
 .selcur{max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
 .scrollpop{max-height:320px;overflow:auto;min-width:215px}
@@ -113,7 +116,7 @@ body.side-collapsed #sidebar > *{display:none}
 .thumb:hover .page{box-shadow:0 0 0 4px #a1a1aa}
 #thumbs img{-webkit-user-drag:none}
 
-#editor-scroll{flex:1;overflow:auto;min-width:0}
+#editor-scroll{flex:1;overflow:auto;min-width:0;touch-action:pan-x pan-y}
 #pages{position:relative;width:max-content;margin:0 auto;padding:28px;display:flex;flex-direction:column;gap:26px}
 
 /* ---------- 페이지 ---------- */
@@ -259,8 +262,16 @@ tr.mrow .mcell{min-height:14mm}
     <button class="mbtn" id="b-follow-lock" style="display:none" title="편집자를 계속 따라가기 (스포트라이트)">고정</button>
     <span id="sync-status" style="display:none;font-size:12px;margin:0 6px;white-space:nowrap"></span>
     <button class="mbtn" id="b-login" style="display:none">로그인</button>
-    <input type="range" id="zoom" min="40" max="160" value="100" title="화면 확대/축소">
-    <span id="zoom-val">100%</span>
+    <div class="menu">
+      <button class="mbtn" id="b-zoom" title="화면 확대/축소">100%</button>
+      <div class="pop" id="zoom-pop" style="left:auto;right:0;min-width:200px">
+        <div class="pophead">화면 확대/축소</div>
+        <div class="zoomrow">
+          <input type="range" id="zoom" min="40" max="160" value="100" title="화면 확대/축소">
+          <span id="zoom-val">100%</span>
+        </div>
+      </div>
+    </div>
     <button class="mbtn" id="b-fit" title="페이지 너비를 창에 맞춤">맞춤</button>
   </div>
 </header>
@@ -2094,6 +2105,7 @@ function setZoom(v) {
   z.value = v;
   z.style.setProperty('--zpct', ((Math.min(160, Math.max(40, v)) - 40) / 120 * 100) + '%');
   $('#zoom-val').textContent = v + '%';
+  $('#b-zoom').textContent = v + '%';
   hideRowtools();
   if (cloudRole === 'editor') publishPresence();
 }
@@ -2102,6 +2114,56 @@ $('#b-fit').addEventListener('click', () => {
   const { w } = pageMM();
   setZoom((editorScroll.clientWidth - 64) / (w * PXMM) * 100);
 });
+
+/* --- 핀치 줌 (데스크탑 트랙패드 · 모바일 터치) — 포인터 위치를 앵커로 유지 --- */
+function zoomAt(pct, cx, cy) {
+  const z0 = zoomFactor();
+  const r = editorScroll.getBoundingClientRect();
+  const ax = cx - r.left, ay = cy - r.top;
+  const dx = (editorScroll.scrollLeft + ax) / z0;   /* 앵커 지점의 문서 좌표(줌 1 기준) */
+  const dy = (editorScroll.scrollTop + ay) / z0;
+  setZoom(pct);
+  const z1 = zoomFactor();
+  editorScroll.scrollLeft = dx * z1 - ax;
+  editorScroll.scrollTop = dy * z1 - ay;
+}
+let pinchPct = null; /* 휠 델타가 1% 미만이어도 누적되도록 실수 배율 유지 */
+editorScroll.addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return; /* 크롬·엣지·FF: 트랙패드 핀치 = ctrl+wheel. ⌘+휠 줌도 허용 */
+  e.preventDefault();
+  const cur = zoomFactor() * 100;
+  if (pinchPct == null || Math.abs(pinchPct - cur) > 1.5) pinchPct = cur;
+  pinchPct = Math.max(20, Math.min(200, pinchPct * Math.exp(-e.deltaY * 0.01)));
+  zoomAt(pinchPct, e.clientX, e.clientY);
+}, { passive: false });
+/* 모바일: 두 손가락 핀치 */
+const touchDist = ts => Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY);
+let touchPinch = null;
+editorScroll.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) touchPinch = { d0: touchDist(e.touches), pct0: zoomFactor() * 100 };
+}, { passive: true });
+editorScroll.addEventListener('touchmove', e => {
+  if (!touchPinch || e.touches.length !== 2) return;
+  e.preventDefault();
+  const pct = Math.max(20, Math.min(200, touchPinch.pct0 * touchDist(e.touches) / touchPinch.d0));
+  zoomAt(pct,
+    (e.touches[0].clientX + e.touches[1].clientX) / 2,
+    (e.touches[0].clientY + e.touches[1].clientY) / 2);
+}, { passive: false });
+editorScroll.addEventListener('touchend', () => { touchPinch = null; }, { passive: true });
+editorScroll.addEventListener('touchcancel', () => { touchPinch = null; }, { passive: true });
+/* 사파리(맥·iOS): 제스처 이벤트. iOS에서 터치 핸들러와 중복되지 않게 touchPinch 중엔 배율만 막음 */
+let gesturePct0 = null;
+editorScroll.addEventListener('gesturestart', e => {
+  e.preventDefault();
+  gesturePct0 = touchPinch ? null : zoomFactor() * 100;
+});
+editorScroll.addEventListener('gesturechange', e => {
+  e.preventDefault();
+  if (gesturePct0 == null) return;
+  zoomAt(Math.max(20, Math.min(200, gesturePct0 * e.scale)), e.clientX, e.clientY);
+});
+editorScroll.addEventListener('gestureend', e => { e.preventDefault(); gesturePct0 = null; });
 
 /* --- 파일 --- */
 $('#b-save').addEventListener('click', saveDoc);
