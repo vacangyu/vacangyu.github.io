@@ -396,7 +396,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 00:44";
+const BUILD_ID = "2026-08-19 00:49";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -3521,6 +3521,25 @@ if (BUILD_ID) {
   document.body.appendChild(bt);
   requestAnimationFrame(() => bt.classList.add('show'));
   setTimeout(() => { bt.classList.remove('show'); setTimeout(() => bt.remove(), 600); }, 4500);
+  /* 브라우저 HTML 캐시(10분)로 구버전이 뜨는 문제 방지 —
+     서버의 최신 빌드 번호를 확인해 다르면 캐시를 우회해 1회 자동 새로고침 */
+  setTimeout(async () => {
+    try {
+      const appUrl = IN_SB ? '/sb/app/' : location.pathname;
+      const res = await fetch(appUrl, { cache: 'no-store' });
+      if (!res.ok) return;
+      const head = (await res.text()).slice(0, 400000);
+      const m = /const BUILD_ID = "([^"]+)"/.exec(head);
+      if (!m || m[1] === BUILD_ID) return;
+      const guard = 'sb_reloaded_' + m[1];
+      if (sessionStorage.getItem(guard)) return; /* 무한 새로고침 방지 */
+      sessionStorage.setItem(guard, '1');
+      if (dirty) { toast('새 버전(' + m[1] + ')이 배포되었습니다 — 저장이 끝나면 새로고침하세요'); return; }
+      const idx = Object.keys(films).indexOf(currentFilm) + 1;
+      location.replace(IN_SB ? '/sb/app/?f=' + idx + '&v=' + Date.now()
+                             : location.pathname + '?v=' + Date.now());
+    } catch (e) {}
+  }, 2500);
 }
 
 /* 클로드/샌드박스 미리보기 환경 안내 */
