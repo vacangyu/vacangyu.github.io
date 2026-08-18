@@ -174,13 +174,12 @@ tr.mrow .mcell{min-height:14mm}
 .mfig.fresize img{outline:2px dashed #2563eb;outline-offset:-2px}
 .mfh{position:absolute;width:10px;height:10px;background:#fff;border:1.5px solid #2563eb;border-radius:3px;z-index:7;cursor:nwse-resize}
 .mfh[data-corner="tr"],.mfh[data-corner="bl"]{cursor:nesw-resize}
-/* 행 도구 — 윈도우98 스타일: 세로 정렬·회색 모노톤·직사각형, 셀 왼편 상단 부착 */
-#rowtools{position:fixed;display:flex;flex-direction:column;gap:0;background:#c0c0c0;padding:1px;border-radius:0;z-index:50;
-  border:1px solid;border-color:#fff #6d6d6d #6d6d6d #fff;box-shadow:1px 1px 0 #404040}
+/* 행 도구 — Windows 8 스타일: 세로 정렬·직사각형·플랫, 반투명 배경 + 호버 시 칸 전체가 살짝 어두워짐 */
+#rowtools{position:fixed;display:flex;flex-direction:column;gap:0;background:rgba(232,232,235,.82);padding:0;border-radius:0;z-index:50;border:1px solid rgba(0,0,0,.12)}
 #rowtools.hidden{display:none}
-#rowtools button{width:22px;height:22px;border:1px solid transparent;background:transparent;color:#222;cursor:pointer;border-radius:0;font-size:12px;line-height:1;padding:0}
-#rowtools button:hover{border-color:#fff #6d6d6d #6d6d6d #fff;background:#c8c8c8}
-#rowtools button:active{border-color:#6d6d6d #fff #fff #6d6d6d;background:#b4b4b4}
+#rowtools button{width:22px;height:22px;border:none;background:transparent;color:#3f3f46;cursor:pointer;border-radius:0;font-size:12px;line-height:1;padding:0;transition:background .13s ease}
+#rowtools button:hover{background:rgba(0,0,0,.10)}
+#rowtools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
 #measure{position:absolute;left:-10000px;top:0;visibility:hidden;font-family:var(--doc-font)}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2b2f3a;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:99;transition:opacity .3s;max-width:70vw;text-align:center}
 #toast.hidden{opacity:0;pointer-events:none}
