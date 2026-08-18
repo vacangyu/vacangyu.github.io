@@ -40,7 +40,7 @@ body{
 /* ---------- 뷰어(읽기 전용) 모드 ---------- */
 body.viewer .eo,body.viewer #bar-menu .sep,body.viewer #side-actions,body.viewer #rowtools,
 body.viewer .vimport,body.viewer .vtools,body.viewer .vzoom,body.viewer .grip{display:none !important}
-body.viewer .cell,body.viewer td.c-ctx,body.viewer td.c-n,body.viewer td.c-v{cursor:default}
+body.viewer .cell,body.viewer td.c-ctx,body.viewer td.c-n,body.viewer td.c-x,body.viewer td.c-v{cursor:default}
 body.viewer .thumb{cursor:pointer}
 /* ---------- 로그인 모달 ---------- */
 .modalwrap{position:fixed;inset:0;background:rgba(24,24,27,.4);display:flex;align-items:center;justify-content:center;z-index:300}
@@ -140,7 +140,7 @@ tr.hdr td{height:8mm;background:var(--hdr-bg,#ffffff);vertical-align:middle}
 .cell{padding:1.5mm 2mm;min-height:6mm;outline:none;font-size:var(--doc-fs);line-height:1.5;word-wrap:break-word;overflow-wrap:break-word}
 td.c-s .cell,td.c-c .cell{position:absolute;inset:0;overflow:hidden;min-height:0}
 td.c-v{vertical-align:middle}
-td.c-ctx,td.c-n{cursor:text}
+td.c-ctx,td.c-n,td.c-x{cursor:text}
 .vstack{display:flex;flex-direction:column;gap:2mm;margin:1.5mm;align-items:center}
 .vbox{position:relative;width:100%;aspect-ratio:var(--vratio,1.5);background:#fff;overflow:hidden}
 .vbox img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff}
@@ -184,17 +184,26 @@ tr.mrow .mcell{min-height:14mm}
 /* 행 도구 — Windows 8 스타일: 세로 정렬·직사각형·플랫, 반투명 배경 + 호버 시 칸 전체가 살짝 어두워짐 */
 #rowtools{position:fixed;display:flex;flex-direction:column;gap:0;background:rgba(232,232,235,.82);padding:0;border-radius:0;z-index:50;border:1px solid rgba(0,0,0,.12)}
 #rowtools.hidden{display:none}
+/* 열 도구 — 행 도구와 같은 Windows 8 스타일, 헤더 셀 상단에 가로로 부착 */
+#coltools{position:fixed;display:flex;flex-direction:row;gap:0;background:rgba(232,232,235,.82);padding:0;border-radius:0;z-index:50;border:1px solid rgba(0,0,0,.12)}
+#coltools.hidden{display:none}
+#coltools button{width:22px;height:22px;border:none;background:transparent;color:#3f3f46;cursor:pointer;border-radius:0;font-size:11px;line-height:1;padding:0;transition:background .13s ease}
+#coltools button:hover{background:rgba(0,0,0,.10)}
+#coltools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
+#coltools button:disabled{opacity:.3;cursor:default;background:transparent}
 #rowtools button{width:22px;height:22px;border:none;background:transparent;color:#3f3f46;cursor:pointer;border-radius:0;font-size:12px;line-height:1;padding:0;transition:background .13s ease}
 #rowtools button:hover{background:rgba(0,0,0,.10)}
 #rowtools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
 #measure{position:absolute;left:-10000px;top:0;visibility:hidden;font-family:var(--doc-font)}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2b2f3a;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:99;transition:opacity .3s;max-width:70vw;text-align:center}
+#build-toast{position:fixed;top:52px;right:14px;z-index:99;background:rgba(43,47,58,.92);color:#fff;padding:6px 11px;border-radius:6px;font-size:11.5px;opacity:0;transition:opacity .4s;pointer-events:none;font-variant-numeric:tabular-nums}
+#build-toast.show{opacity:1}
 #toast.hidden{opacity:0;pointer-events:none}
 
 /* ---------- 인쇄 ---------- */
 @media print{
   body{display:block;background:#fff;overflow:visible}
-  #topbar,#sidebar,#rowtools,#toast,#measure,#follow-frame,#follow-pill,#boot-overlay,#login-modal,.noprint{display:none !important}
+  #topbar,#sidebar,#rowtools,#coltools,#toast,#measure,#follow-frame,#follow-pill,#boot-overlay,#login-modal,.noprint{display:none !important}
   #main{display:block}
   #editor-scroll{overflow:visible}
   #pages{display:block;padding:0;margin:0;width:auto;gap:0;zoom:1 !important}
@@ -313,6 +322,13 @@ tr.mrow .mcell{min-height:14mm}
   <div id="editor-scroll"><div id="pages"></div></div>
 </div>
 
+<div id="coltools" class="hidden noprint">
+  <button data-act="left" title="열을 왼쪽으로 이동">◀</button>
+  <button data-act="right" title="열을 오른쪽으로 이동">▶</button>
+  <button data-act="add" title="오른쪽에 새 열 추가">＋</button>
+  <button data-act="del" title="열 삭제">✕</button>
+</div>
+
 <div id="rowtools" class="hidden noprint">
   <button data-act="up" title="컷 위로">↑</button>
   <button data-act="down" title="컷 아래로">↓</button>
@@ -351,6 +367,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
+const BUILD_ID = "2026-08-19 00:35";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -366,7 +383,6 @@ const textOf = html => { const d = document.createElement('div'); d.innerHTML = 
 
 const MARGIN = 10;               // mm
 const MARKER_MM = 6;             // 컷 이어짐(⋮) 표시 높이 mm
-const HEADERS = ['S#','C#','Video','Context','Notes'];
 const DEFAULT_FONT = "'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif";
 const pagesEl = $('#pages');
 const editorScroll = $('#editor-scroll');
@@ -380,9 +396,22 @@ const PXMM = ruler.getBoundingClientRect().width / 100;
 
 /* ---------- 문서 모델 ---------- */
 function newCut(s, c) { return { id: uid(), s: s ? esc(s) : '', c: c ? esc(c) : '', imgs: [], context: '', notes: '' }; }
-function defaultSettings() {
-  return { orientation: 'portrait', colPct: [5, 7, 34, 40, 14], font: DEFAULT_FONT, fontSize: 10, pageNums: true, hdrColor: '#ffffff', videoRatio: '1.85:1', cast: '', autoHl: true, title: '스토리보드' };
+function defaultCols() {
+  return [
+    { id: 's', label: 'S#', kind: 'text' },
+    { id: 'c', label: 'C#', kind: 'text' },
+    { id: 'v', label: 'Video', kind: 'video' },
+    { id: 'context', label: 'Context', kind: 'text' },
+    { id: 'notes', label: 'Notes', kind: 'text' }
+  ];
 }
+function defaultSettings() {
+  return { orientation: 'portrait', cols: defaultCols(), colPct: [5, 7, 34, 40, 14], font: DEFAULT_FONT, fontSize: 10, pageNums: true, hdrColor: '#ffffff', videoRatio: '1.85:1', cast: '', autoHl: true, title: '스토리보드' };
+}
+function docCols() { return doc.settings.cols || (doc.settings.cols = defaultCols()); }
+/* 컬럼 표시용 클래스: 기본 열은 기존 스타일 유지, 사용자 열은 c-x */
+const COL_CLS = { s: 'c-s', c: 'c-c', context: 'c-ctx', notes: 'c-n' };
+function colClass(col) { return col.kind === 'video' ? 'c-v' : (COL_CLS[col.id] || 'c-x'); }
 /* ---------- 작품(영화) 구조: 두 편의 스토리보드 ---------- */
 const FILMS = ['시절인, 연', '개구리'];
 function blankDoc() {
@@ -427,11 +456,12 @@ function buildBoardTable(block, rows, measure) {
     const c = document.createElement('col'); c.style.width = p + '%'; c.dataset.i = i; cg.appendChild(c);
   });
   t.appendChild(cg);
+  const cols = docCols();
   const hdr = document.createElement('tr'); hdr.className = 'hdr';
-  HEADERS.forEach((h, i) => {
-    const td = document.createElement('td'); td.className = 'hcell';
-    const sp = document.createElement('span'); sp.textContent = h; td.appendChild(sp);
-    if (!measure && i < 4) {
+  cols.forEach((col, i) => {
+    const td = document.createElement('td'); td.className = 'hcell'; td.dataset.ix = i;
+    const sp = document.createElement('span'); sp.textContent = col.label; td.appendChild(sp);
+    if (!measure && i < cols.length - 1) {
       const g = document.createElement('div'); g.className = 'grip noprint'; g.dataset.i = i; td.appendChild(g);
     }
     hdr.appendChild(td);
@@ -442,10 +472,11 @@ function buildBoardTable(block, rows, measure) {
 }
 
 function buildCutRow(cut, measure) {
+  const cols = docCols();
   if (cut.merged) {
-    /* 합쳐진 행: 5열을 하나로 합친 메모/사진 셀 */
+    /* 합쳐진 행: 전체 열을 하나로 합친 메모/사진 셀 */
     const tr = document.createElement('tr'); tr.className = 'cut mrow'; tr.dataset.cutId = cut.id;
-    const td = document.createElement('td'); td.colSpan = 5;
+    const td = document.createElement('td'); td.colSpan = cols.length;
     const d = document.createElement('div'); d.className = 'cell mcell'; d.dataset.f = 'context';
     if (!measure && !isViewer()) d.contentEditable = 'true';
     d.innerHTML = cut.context || '';
@@ -453,19 +484,12 @@ function buildCutRow(cut, measure) {
     return tr;
   }
   const tr = document.createElement('tr'); tr.className = 'cut'; tr.dataset.cutId = cut.id;
-  [['s', 'c-s'], ['c', 'c-c']].forEach(([f, cls]) => {
-    const td = document.createElement('td'); td.className = cls;
-    const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = f;
+  cols.forEach(col => {
+    if (col.kind === 'video') { tr.appendChild(buildVideoTd(cut, measure)); return; }
+    const td = document.createElement('td'); td.className = colClass(col);
+    const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = col.id;
     if (!measure && !isViewer()) d.contentEditable = 'true';
-    d.innerHTML = cut[f] || '';
-    td.appendChild(d); tr.appendChild(td);
-  });
-  tr.appendChild(buildVideoTd(cut, measure));
-  [['context', 'c-ctx'], ['notes', 'c-n']].forEach(([f, cls]) => {
-    const td = document.createElement('td'); td.className = cls;
-    const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = f;
-    if (!measure && !isViewer()) d.contentEditable = 'true';
-    d.innerHTML = cut[f] || '';
+    d.innerHTML = cut[col.id] || '';
     td.appendChild(d); tr.appendChild(td);
   });
   return tr;
@@ -547,9 +571,10 @@ function buildVideoStack(cut, measure) {
 
 /* 페이지 높이를 초과하는 컷의 분할 조각(슬라이스) 행 */
 function buildCutRowSlice(cut, s) {
+  const cols = docCols();
   if (cut.merged) {
     const tr = document.createElement('tr'); tr.className = 'cut slice mrow'; tr.dataset.cutId = cut.id;
-    const td = document.createElement('td'); td.colSpan = 5;
+    const td = document.createElement('td'); td.colSpan = cols.length;
     const d = document.createElement('div'); d.className = 'cell mcell'; d.dataset.f = 'context';
     d.contentEditable = String(!isViewer()); d.innerHTML = cut.context || '';
     td.appendChild(d);
@@ -558,22 +583,27 @@ function buildCutRowSlice(cut, s) {
     return tr;
   }
   const tr = document.createElement('tr'); tr.className = 'cut slice'; tr.dataset.cutId = cut.id;
-  [['s', 'c-s'], ['c', 'c-c']].forEach(([f, cls]) => {
-    const td = document.createElement('td'); td.className = cls; td.style.height = s.len + 'px';
-    if (s.first) {
-      const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = f;
-      d.contentEditable = String(!isViewer()); d.innerHTML = cut[f] || '';
-      td.appendChild(d);
+  cols.forEach(col => {
+    if (col.kind === 'video') {
+      const tv = buildVideoTd(cut, false);
+      wrapClip(tv, s);
+      tr.appendChild(tv);
+      return;
     }
-    tr.appendChild(td);
-  });
-  const tv = buildVideoTd(cut, false);
-  wrapClip(tv, s);
-  tr.appendChild(tv);
-  [['context', 'c-ctx'], ['notes', 'c-n']].forEach(([f, cls]) => {
-    const td = document.createElement('td'); td.className = cls;
-    const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = f;
-    d.contentEditable = String(!isViewer()); d.innerHTML = cut[f] || '';
+    if (col.id === 's' || col.id === 'c') {
+      /* 라벨 열(S#, C#): 첫 슬라이스에만 표시 */
+      const td = document.createElement('td'); td.className = colClass(col); td.style.height = s.len + 'px';
+      if (s.first) {
+        const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = col.id;
+        d.contentEditable = String(!isViewer()); d.innerHTML = cut[col.id] || '';
+        td.appendChild(d);
+      }
+      tr.appendChild(td);
+      return;
+    }
+    const td = document.createElement('td'); td.className = colClass(col);
+    const d = document.createElement('div'); d.className = 'cell'; d.dataset.f = col.id;
+    d.contentEditable = String(!isViewer()); d.innerHTML = cut[col.id] || '';
     td.appendChild(d);
     wrapClip(td, s);
     tr.appendChild(td);
@@ -1345,6 +1375,58 @@ function showRowtools(tr) {
 }
 function hideRowtools() { rowtools.classList.add('hidden'); }
 
+/* ---------- 열 도구 (헤더 호버) ---------- */
+const coltools = $('#coltools');
+function showColtools(td) {
+  const ix = +td.dataset.ix;
+  const cols = docCols();
+  coltools.dataset.ix = ix;
+  coltools.querySelector('[data-act="left"]').disabled = ix === 0;
+  coltools.querySelector('[data-act="right"]').disabled = ix === cols.length - 1;
+  const del = coltools.querySelector('[data-act="del"]');
+  del.disabled = cols[ix].kind === 'video';
+  del.title = cols[ix].kind === 'video' ? 'Video 열은 삭제할 수 없습니다' : '열 삭제';
+  coltools.classList.remove('hidden');
+  const rect = td.getBoundingClientRect();
+  const h = coltools.offsetHeight || 24;
+  coltools.style.left = rect.left + 'px';
+  coltools.style.top = Math.max(44, rect.top - h) + 'px'; /* 헤더 셀 바로 위 */
+}
+function hideColtools() { coltools.classList.add('hidden'); }
+function colAction(act, ix) {
+  const cols = docCols(), pct = doc.settings.colPct;
+  const swap = (a, i, j) => { const t = a[i]; a[i] = a[j]; a[j] = t; };
+  if (act === 'left' && ix > 0) { swap(cols, ix, ix - 1); swap(pct, ix, ix - 1); }
+  else if (act === 'right' && ix < cols.length - 1) { swap(cols, ix, ix + 1); swap(pct, ix, ix + 1); }
+  else if (act === 'add') {
+    const label = (prompt('새 열의 이름을 입력하세요') || '').trim();
+    if (!label) return;
+    cols.splice(ix + 1, 0, { id: 'col_' + uid(), label, kind: 'text' });
+    const w = 12; /* 새 열 12%, 기존 열은 비례 축소 */
+    for (let i = 0; i < pct.length; i++) pct[i] = pct[i] * (100 - w) / 100;
+    pct.splice(ix + 1, 0, w);
+  } else if (act === 'del') {
+    if (cols[ix].kind === 'video') return;
+    if (cols.length <= 2) { toast('최소 두 개의 열이 필요합니다'); return; }
+    if (!confirm(`"${cols[ix].label}" 열을 삭제할까요?\n이 열의 내용은 더 이상 표시되지 않습니다.`)) return;
+    cols.splice(ix, 1);
+    pct.splice(ix, 1);
+    const tot = pct.reduce((a, b) => a + b, 0) || 1;
+    for (let i = 0; i < pct.length; i++) pct[i] = pct[i] / tot * 100;
+  } else return;
+  hideColtools();
+  markDirty();
+  renderAll(false);
+}
+coltools.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b && !b.disabled) colAction(b.dataset.act, +coltools.dataset.ix);
+});
+coltools.addEventListener('mouseleave', e => {
+  if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#editor-scroll')) return;
+  hideColtools();
+});
+
 /* ---------- 저장 / 불러오기 ---------- */
 function serialize() {
   films[currentFilm] = doc;
@@ -1384,6 +1466,14 @@ function normalizeFilm(f) {
     settings: { ...defaultSettings(), ...((f && f.settings) || {}) },
     blocks: f && Array.isArray(f.blocks) ? f.blocks : []
   };
+  /* 동적 컬럼: cols가 없거나 colPct 길이가 어긋나면 정규화 */
+  if (!Array.isArray(film.settings.cols) || !film.settings.cols.length) film.settings.cols = defaultCols();
+  let pct = film.settings.colPct;
+  if (!Array.isArray(pct) || pct.length !== film.settings.cols.length) {
+    pct = film.settings.cols.map((c, i) => (Array.isArray(pct) && typeof pct[i] === 'number') ? pct[i] : 100 / film.settings.cols.length);
+    const tot = pct.reduce((a, b) => a + b, 0) || 1;
+    film.settings.colPct = pct.map(x => x / tot * 100);
+  }
   film.blocks.forEach(b => {
     if (!b.id) b.id = uid();
     if (b.type === 'board') (b.cuts || (b.cuts = [])).forEach(c => {
@@ -1690,7 +1780,7 @@ pagesEl.addEventListener('keydown', e => {
 /* Context/Notes: 셀의 빈 영역을 클릭해도 커서 활성화 */
 pagesEl.addEventListener('mousedown', e => {
   if (isViewer()) return;
-  const td = e.target.closest ? e.target.closest('td.c-ctx, td.c-n') : null;
+  const td = e.target.closest ? e.target.closest('td.c-ctx, td.c-n, td.c-x') : null;
   if (!td || (e.target.closest && e.target.closest('.cell'))) return;
   const cell = td.querySelector('.cell');
   if (!cell) return;
@@ -2080,26 +2170,67 @@ pagesEl.addEventListener('scroll', e => {
   if (c && c.classList && c.classList.contains('clip')) { c.scrollTop = 0; c.scrollLeft = 0; }
 }, true);
 /* 클립보드의 이미지 → 선택된 Video 셀 (파일이 없으면 HTML 속 이미지 주소에서 다운로드) */
-document.addEventListener('paste', e => {
+/* 클립보드에서 이미지 파일 수집 — files가 비어도 items에 비트맵이 실려오는 앱 대응 */
+function clipboardImageFiles(cd) {
+  if (!cd) return [];
+  const out = [...(cd.files || [])].filter(x => x.type.startsWith('image/'));
+  if (!out.length && cd.items) {
+    for (const it of cd.items) {
+      if (it.kind === 'file' && it.type && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) out.push(f);
+      }
+    }
+  }
+  return out;
+}
+/* 피그마 등: paste 이벤트에 비트맵이 없어도 OS 클립보드에는 PNG가 있는 경우 — 비동기 클립보드로 직접 읽기 */
+async function readClipboardImagesAsync() {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) return [];
+    /* 권한 프롬프트 등으로 무한 대기하지 않도록 1.5초 제한 */
+    const items = await Promise.race([
+      navigator.clipboard.read(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('clipboard timeout')), 1500))
+    ]);
+    const out = [];
+    for (const it of items) {
+      const t = (it.types || []).find(x => x.startsWith('image/'));
+      if (t) out.push(await it.getType(t));
+    }
+    return out;
+  } catch (e) { return []; }
+}
+document.addEventListener('paste', async e => {
   if (isViewer()) return;
   if (e.target.closest && e.target.closest('.cell[contenteditable="true"]')) return;
   if (!state.imgTarget || !e.clipboardData) return;
-  const fs = [...(e.clipboardData.files || [])].filter(x => x.type.startsWith('image/'));
+  const fs = clipboardImageFiles(e.clipboardData);
   if (fs.length) { e.preventDefault(); addCutImages(state.imgTarget, fs); return; }
   const html = e.clipboardData.getData('text/html');
   if (html && /<img[\s>]/i.test(html)) {
     e.preventDefault();
     importImagesFromHtml(state.imgTarget, html);
+    return;
   }
+  e.preventDefault();
+  const target = state.imgTarget;
+  const blobs = await readClipboardImagesAsync();
+  if (blobs.length) { addCutImages(target, blobs); return; }
+  if (/figmeta|figclip|figma/i.test(html || '')) toast('피그마 벡터가 복사되어 있습니다 — 피그마에서 우클릭 → Copy/paste as → Copy as PNG 후 다시 붙여넣어 주세요');
 });
 
 /* --- 행 도구 --- */
 pagesEl.addEventListener('mouseover', e => {
   if (isViewer()) return;
+  const hc = e.target.closest ? e.target.closest('td.hcell') : null;
+  if (hc) { showColtools(hc); return; }
+  if (!(e.target.closest && e.target.closest('#coltools'))) hideColtools();
   const tr = e.target.closest ? e.target.closest('tr.cut') : null;
   if (tr) showRowtools(tr);
 });
 editorScroll.addEventListener('scroll', hideRowtools);
+editorScroll.addEventListener('scroll', hideColtools);
 editorScroll.addEventListener('mouseleave', e => {
   if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#rowtools')) return;
   hideRowtools();
@@ -2911,7 +3042,10 @@ function mergeById(base, local, remote, mergeItem) {
 function mergeCut(b, l, r) {
   b = b || {};
   const out = { ...l };
-  for (const k of ['s', 'c', 'context', 'notes', 'merged']) {
+  /* 동적 컬럼 대응: id·imgs 를 제외한 모든 필드를 3-way 병합 */
+  const keys = new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)]);
+  keys.delete('id'); keys.delete('imgs');
+  for (const k of keys) {
     const v = pick3(b[k], l[k], r[k]);
     if (v === undefined) delete out[k]; else out[k] = v;
   }
@@ -3157,6 +3291,16 @@ renderAll(false);
 cloudInit();
 /* 로컬 모드: 내장 문서 로드(스크립트 끝의 임베드 블록) 이후 /sb/N 라우팅 적용 */
 if (!FIREBASE_CONFIG) setTimeout(() => { if (!bootDone.applied) { bootDone.applied = true; applyUrlFilm(); } }, 0);
+/* 현재 보고 있는 빌드 확인용 — 로드 시 우상단에 빌드 번호 토스트 */
+if (BUILD_ID) {
+  const bt = document.createElement('div');
+  bt.id = 'build-toast';
+  bt.className = 'noprint';
+  bt.textContent = '빌드 ' + BUILD_ID;
+  document.body.appendChild(bt);
+  requestAnimationFrame(() => bt.classList.add('show'));
+  setTimeout(() => { bt.classList.remove('show'); setTimeout(() => bt.remove(), 600); }, 4500);
+}
 
 /* 클로드/샌드박스 미리보기 환경 안내 */
 if (window.self !== window.top) {
