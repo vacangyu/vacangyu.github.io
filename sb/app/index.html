@@ -2273,6 +2273,7 @@ window.addEventListener('beforeunload', e => {
    ============================================================ */
 let fb = null;
 let viewerUnsub = null;
+let editorUnsub = null;
 const imgCache = new Map();       /* hash → dataURL */
 const uploadedHashes = new Set();
 function boardRef(path) { return fb.db.ref('boards/' + BOARD_ID + (path ? '/' + path : '')); }
@@ -2283,9 +2284,14 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
+const hashMemo = new Map(); /* dataURL → hash 메모 — 반복 strip 비용 절감 */
 async function hashStr(str) {
+  let h = hashMemo.get(str);
+  if (h) return h;
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return [...new Uint8Array(buf)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
+  h = [...new Uint8Array(buf)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
+  hashMemo.set(str, h);
+  return h;
 }
 async function stripHtmlImages(html, newImages) {
   const re = /src="(data:image\/[^"]+)"/g;
@@ -2654,6 +2660,150 @@ function setSyncStatus(s) {
   else if (s === 'error') { el.textContent = '저장 오류 — 자동 재시도'; el.style.color = '#dc2626'; }
   else el.textContent = '';
 }
+/* ============================================================
+   동시 편집 병합 — 셀(필드) 단위 3-way 머지 (Google Docs 벤치마킹)
+   base(서버의 마지막 알려진 상태) 대비 local/remote 중 변경된 쪽을 채택,
+   서로 다른 셀·컷·작품의 동시 수정은 전부 병합. 같은 필드 동시 수정만
+   로컬 우선(발행 시 전파 → 최종 발행자 기준 수렴). 발행은 RTDB 트랜잭션
+   (compare-and-merge)이라 발행 경쟁에서도 변경이 유실되지 않는다.
+   ============================================================ */
+let baseStr = null;        /* 서버가 가진 것으로 아는 마지막 stripped JSON */
+let pendingRemote = null;  /* 아직 적용하지 못한 최신 원격 문서 */
+let collabChain = Promise.resolve(); /* 병합·발행 직렬화 큐 */
+let drainTimer = null;
+let lastInputTs = 0;
+pagesEl.addEventListener('input', () => { lastInputTs = Date.now(); }, true);
+function collabQueue(fn) { collabChain = collabChain.then(fn).catch(() => {}); return collabChain; }
+function pick3(b, l, r) {
+  const jb = JSON.stringify(b === undefined ? null : b);
+  if (JSON.stringify(l === undefined ? null : l) === jb) return r;
+  if (JSON.stringify(r === undefined ? null : r) === jb) return l;
+  return l;
+}
+/* id 배열 3-way 병합: 순서는 로컬이 바꿨으면 로컬, 아니면 원격 기준.
+   한쪽에서 지웠어도 다른 쪽이 수정했으면 살린다. 추가는 양쪽 다 반영. */
+function mergeById(base, local, remote, mergeItem) {
+  base = base || []; local = local || []; remote = remote || [];
+  const bMap = new Map(base.map(x => [x.id, x]));
+  const lMap = new Map(local.map(x => [x.id, x]));
+  const rMap = new Map(remote.map(x => [x.id, x]));
+  const localOrderChanged = local.map(x => x.id).join('\n') !== base.map(x => x.id).join('\n');
+  const prim = localOrderChanged ? local : remote;
+  const sec = localOrderChanged ? remote : local;
+  const out = [];
+  const used = new Set();
+  const itemFor = id => {
+    const b = bMap.get(id), l = lMap.get(id), r = rMap.get(id);
+    if (l && r) return mergeItem(b, l, r);
+    if (l && !r) {
+      if (!b) return l; /* 로컬에서 추가 */
+      return JSON.stringify(l) === JSON.stringify(b) ? null : l; /* 원격 삭제 vs 로컬 수정 */
+    }
+    if (!l && r) {
+      if (!b) return r;
+      return JSON.stringify(r) === JSON.stringify(b) ? null : r;
+    }
+    return null;
+  };
+  for (const x of prim) {
+    if (used.has(x.id)) continue;
+    used.add(x.id);
+    const it = itemFor(x.id);
+    if (it) out.push(it);
+  }
+  sec.forEach((x, i) => {
+    if (used.has(x.id)) return;
+    used.add(x.id);
+    const it = itemFor(x.id);
+    if (!it) return;
+    const prevId = i > 0 ? sec[i - 1].id : null;
+    const at = prevId ? out.findIndex(o => o.id === prevId) : -1;
+    out.splice(at + 1, 0, it); /* 상대가 추가한 항목은 상대 리스트의 앞 항목 뒤에 삽입 */
+  });
+  return out;
+}
+function mergeCut(b, l, r) {
+  b = b || {};
+  const out = { ...l };
+  for (const k of ['s', 'c', 'context', 'notes', 'merged']) {
+    const v = pick3(b[k], l[k], r[k]);
+    if (v === undefined) delete out[k]; else out[k] = v;
+  }
+  out.imgs = pick3(b.imgs, l.imgs, r.imgs) || [];
+  return out;
+}
+function mergeBlock(b, l, r) {
+  b = b || {};
+  if (l.type === 'title' || r.type === 'title') {
+    const out = { ...l };
+    for (const k of ['text', 'sub']) out[k] = pick3(b[k], l[k], r[k]);
+    return out;
+  }
+  return { ...l, cuts: mergeById(b.cuts, l.cuts, r.cuts, mergeCut) };
+}
+function mergeSettings(b, l, r) {
+  b = b || {}; l = l || {}; r = r || {};
+  const out = {};
+  for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
+    const v = pick3(b[k], l[k], r[k]);
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+function mergeFilmDoc(b, l, r) {
+  if (!l) return r;
+  if (!r) return l;
+  b = b || {};
+  return {
+    settings: mergeSettings(b.settings, l.settings, r.settings),
+    blocks: mergeById(b.blocks, l.blocks, r.blocks, mergeBlock)
+  };
+}
+function mergeDocs(baseS, localS, remoteS) {
+  try {
+    if (!remoteS) return localS;
+    if (!baseS || !localS || localS === remoteS) return remoteS;
+    const B = JSON.parse(baseS), L = JSON.parse(localS), R = JSON.parse(remoteS);
+    const films = {};
+    const keys = [...new Set([...Object.keys(L.films || {}), ...Object.keys(R.films || {}), ...Object.keys(B.films || {})])];
+    for (const k of keys) {
+      const m = mergeFilmDoc((B.films || {})[k], (L.films || {})[k], (R.films || {})[k]);
+      if (m) films[k] = m;
+    }
+    return JSON.stringify({ ...L, films });
+  } catch (e) { return remoteS || localS; }
+}
+/* 병합 결과를 로컬 모델에 반영 — 캐럿·스크롤 보존 */
+async function applyMergedToModel(mergedStr) {
+  const full = await restoreDoc(mergedStr);
+  const cap = captureCaret();
+  applyRemote(full);
+  if (cap) restoreCaret(cap);
+}
+/* 편집 중 원격 문서 수신: 타이핑·IME 조합 중엔 미루고, 한가할 때 병합 적용 */
+function editorApplyRemote(remoteStr) {
+  pendingRemote = remoteStr;
+  drainRemote();
+}
+function drainRemote() {
+  if (drainTimer) return;
+  drainTimer = setTimeout(() => {
+    drainTimer = null;
+    if (!pendingRemote || cloudRole !== 'editor') return;
+    if (composing || Date.now() - lastInputTs < 400) { drainRemote(); return; }
+    const remoteStr = pendingRemote;
+    pendingRemote = null;
+    collabQueue(async () => {
+      if (cloudRole !== 'editor') return;
+      if (remoteStr === baseStr) return; /* 내 발행의 echo */
+      const { docJson: localStr } = await stripDoc(serialize());
+      const merged = mergeDocs(baseStr, localStr, remoteStr);
+      baseStr = remoteStr;
+      if (merged !== localStr) await applyMergedToModel(merged);
+      if (merged !== remoteStr) { dirty = true; schedulePublish(); } /* 서버보다 앞섬 → 발행으로 전파 */
+    });
+  }, 150);
+}
 async function publishNow() {
   if (cloudRole !== 'editor' || !fb) return;
   /* 한글 IME: 발행의 전체 문서 직렬화(수 MB JSON)가 메인 스레드를 점유해
@@ -2661,12 +2811,20 @@ async function publishNow() {
   if (composing) { schedulePublish(); return; }
   try {
     setSyncStatus('saving');
-    const { docJson, newImages } = await stripDoc(serialize());
-    for (const [h, data] of newImages) {
-      await boardRef('images/' + h).set(data);
-      uploadedHashes.add(h);
-    }
-    await boardRef('doc').set(docJson);
+    await collabQueue(async () => {
+      const { docJson: localStr, newImages } = await stripDoc(serialize());
+      for (const [h, data] of newImages) {
+        await boardRef('images/' + h).set(data);
+        uploadedHashes.add(h);
+      }
+      let published = localStr;
+      await boardRef('doc').transaction(cur => {
+        published = (cur && cur !== localStr) ? mergeDocs(baseStr, localStr, cur) : localStr;
+        return published;
+      }, undefined, false);
+      baseStr = published;
+      if (published !== localStr) await applyMergedToModel(published);
+    });
     await boardRef('meta').set({ updatedAt: Date.now(), current: currentFilm });
     dirty = false; /* 클라우드 저장 완료 = 저장된 상태 (창 닫기 경고 해제) */
     setSyncStatus('saved');
@@ -2675,7 +2833,14 @@ async function publishNow() {
     setTimeout(() => { if (cloudRole === 'editor') schedulePublish(); }, 8000);
   }
 }
-const schedulePublish = debounce(publishNow, 3000);
+/* 트레일링 2초 + 최대 6초 — 연속 타이핑 중에도 주기적으로 발행돼 상대에게 전파 */
+let pubT = null, pubDeadline = 0;
+function schedulePublish() {
+  const now = Date.now();
+  if (!pubT) pubDeadline = now + 6000;
+  clearTimeout(pubT);
+  pubT = setTimeout(() => { pubT = null; publishNow(); }, Math.min(2000, Math.max(0, pubDeadline - now)));
+}
 function applyRemote(fullJson) {
   const keepFilm = currentFilm;
   const st = editorScroll.scrollTop;
@@ -2684,9 +2849,11 @@ function applyRemote(fullJson) {
   editorScroll.scrollTop = st;
 }
 function enterViewerMode() {
-  /* 로그아웃 직후라면 내 presence 정리 */
+  /* 로그아웃 직후라면 내 presence·편집 구독 정리 */
+  if (editorUnsub) { editorUnsub(); editorUnsub = null; }
   if (myUid && fb) { try { boardRef('presence/editors/' + myUid).remove(); } catch (e) {} }
   myUid = null; myName = '';
+  baseStr = null;
   cloudRole = 'viewer';
   document.body.classList.add('viewer');
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
@@ -2711,6 +2878,7 @@ function enterViewerMode() {
 }
 async function enterEditorMode() {
   if (viewerUnsub) { viewerUnsub(); viewerUnsub = null; }
+  if (editorUnsub) { editorUnsub(); editorUnsub = null; }
   cloudRole = 'editor';
   const u = fb.auth.currentUser;
   myUid = u ? u.uid : null;
@@ -2719,10 +2887,22 @@ async function enterEditorMode() {
   $('#b-login').textContent = '로그아웃';
   try {
     const snap = await boardRef('doc').get();
-    if (snap.exists()) loadDocFromJSON(await restoreDoc(snap.val()));
-    else publishNow(); /* 클라우드가 비어 있으면 현재 문서를 최초 발행 */
+    if (snap.exists()) {
+      baseStr = snap.val();
+      loadDocFromJSON(await restoreDoc(baseStr));
+    } else publishNow(); /* 클라우드가 비어 있으면 현재 문서를 최초 발행 */
     setSyncStatus('saved');
   } catch (e) { setSyncStatus('error'); }
+  /* 동시 편집: 다른 편집자의 발행을 실시간 수신 → 셀 단위 병합 */
+  const dref = boardRef('doc');
+  const dh = dref.on('value', snap => {
+    if (cloudRole !== 'editor') return;
+    const t = snap.val();
+    if (!t || t === baseStr) return;
+    if (baseStr === null) { baseStr = t; return; }
+    editorApplyRemote(t);
+  });
+  editorUnsub = () => { dref.off('value', dh); pendingRemote = null; };
   bootDone();
   setFollow(null);
   subscribePresence(); /* 편집자도 다른 편집자의 아바타·커서를 본다 */
@@ -2808,6 +2988,13 @@ window.__sb = {
     stripDoc, restoreDoc,
     get role() { return cloudRole; },
     setRole(r) { cloudRole = r; document.body.classList.toggle('viewer', r === 'viewer'); renderAll(false); }
+  },
+  collab: {
+    mergeDocs, pick3, mergeById, editorApplyRemote, drainRemote,
+    get base() { return baseStr; },
+    set base(v) { baseStr = v; },
+    get pending() { return pendingRemote; },
+    queue: collabQueue
   },
   follow: {
     setFollow, jump: jumpToUser,
