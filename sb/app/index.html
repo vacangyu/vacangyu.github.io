@@ -119,6 +119,24 @@ body.following #follow-pill{display:block}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
 .dim-rest{color:#a1a1aa;font-size:calc(1em - 1pt);font-style:italic} /* C#·Next 열 첫 줄 제외: 흐림 + 1pt 축소 + 이탤릭 */
+/* 모바일 뷰어 피드 — 크롬 없이 보기 전용 카드 */
+body.mobileview #topbar,body.mobileview #sidebar,body.mobileview #rowtools,body.mobileview #coltools,
+body.mobileview #cmt-btn,body.mobileview #follow-pill,body.mobileview #follow-frame,body.mobileview #cursor-chat{display:none !important}
+body.mobileview #editor-scroll{touch-action:auto}
+#mfeed{padding:14px 12px 70px;max-width:560px;margin:0 auto;font-size:14px}
+.mcard{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:12px;overflow:hidden;position:relative}
+.mcard-num{position:absolute;top:8px;right:10px;z-index:2;background:rgba(24,24,27,.72);color:#fff;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600}
+.mcard-video{display:flex;flex-direction:column;gap:2px;background:#f4f4f5}
+.mcard-video.empty{display:none}
+.mvbox{position:relative;width:100%;aspect-ratio:var(--vratio,1.85);overflow:hidden;background:#fff}
+.mvbox img{width:100%;height:100%;display:block}
+.mcard-info{padding:12px 14px 13px;display:flex;flex-direction:column;gap:10px}
+.mcard-label{font-size:10px;color:#a1a1aa;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
+.mcard-text{line-height:1.55;color:#26262b;word-break:break-word}
+.mcard.mmerged .mcard-info{background:#fafafa}
+.mfd-title{padding:26px 8px 12px;text-align:center}
+.mfd-title-main{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.mfd-title-sub{font-size:12.5px;color:#71717a;margin-top:3px}
 .ratio-item{display:flex;align-items:center;gap:6px}
 .ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
 /* 행/열 드래그 이동 표시 */
@@ -455,7 +473,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 02:38";
+const BUILD_ID = "2026-08-19 03:20";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -527,6 +545,7 @@ let composing = false;
 let lastCompEnd = 0; /* 마지막 IME 조합 종료 시각 — 직후 재렌더 방지용 */
 let cloudRole = 'off'; /* 'off' | 'viewer' | 'editor' */
 function isViewer() { return cloudRole === 'viewer'; }
+let mobileView = false; /* 모바일 뷰어 전용 피드 레이아웃 */
 const state = { activeBlockId: doc.blocks[0].id, imgTarget: null, imgSel: null, zoomUI: null, panSuppress: false, pageModel: [] };
 
 function findBlock(id) { return doc.blocks.find(b => b.id === id); }
@@ -951,8 +970,100 @@ function restoreCaret(cap) {
   } catch (e) {}
 }
 
+/* ---------- 모바일 뷰어 피드 ---------- */
+function isMobileScreen() { return Math.min(screen.width || 9999, innerWidth) <= 760; }
+function ensureViewportMeta() {
+  if (document.querySelector('meta[name="viewport"]')) return;
+  const m = document.createElement('meta');
+  m.name = 'viewport';
+  m.content = 'width=device-width, initial-scale=1';
+  document.head.appendChild(m);
+}
+function updateMobileView() {
+  const want = isViewer() && isMobileScreen();
+  if (want === mobileView) return;
+  mobileView = want;
+  document.body.classList.toggle('mobileview', mobileView);
+  if (mobileView) ensureViewportMeta();
+  renderAll(false);
+}
+let mvResizeT = null;
+window.addEventListener('resize', () => { clearTimeout(mvResizeT); mvResizeT = setTimeout(updateMobileView, 300); });
+/* 페이지·표 대신 컷 카드 피드: 우상단 S·C 번호, 상단 사진, 하단 Context/Notes/Next */
+function buildMobileFeed() {
+  let feed = $('#mfeed');
+  if (!feed) {
+    feed = document.createElement('div');
+    feed.id = 'mfeed';
+    editorScroll.appendChild(feed);
+  }
+  pagesEl.style.display = 'none';
+  feed.innerHTML = '';
+  const textCols = docCols().filter(c => c.kind === 'text' && c.id !== 's' && c.id !== 'c');
+  for (const b of doc.blocks) {
+    if (b.type === 'title') {
+      const t = document.createElement('div'); t.className = 'mfd-title';
+      const m1 = document.createElement('div'); m1.className = 'mfd-title-main'; m1.innerHTML = b.text || '';
+      const m2 = document.createElement('div'); m2.className = 'mfd-title-sub'; m2.innerHTML = b.sub || '';
+      t.append(m1, m2);
+      feed.appendChild(t);
+      continue;
+    }
+    (b.cuts || []).forEach(cut => {
+      const card = document.createElement('div');
+      card.className = 'mcard' + (cut.merged ? ' mmerged' : '');
+      if (!cut.merged) {
+        const num = document.createElement('span');
+        num.className = 'mcard-num';
+        num.textContent = 'S' + (textOf(cut.s) || '–') + ' · C' + (textOf(cut.c) || '–');
+        card.appendChild(num);
+        const vid = document.createElement('div');
+        vid.className = 'mcard-video' + ((cut.imgs || []).length ? '' : ' empty');
+        (cut.imgs || []).forEach(im => {
+          const box = document.createElement('div'); box.className = 'mvbox';
+          const img = document.createElement('img');
+          img.src = im.src;
+          img.style.objectFit = im.fit || 'contain';
+          const tf = imgTransform(im);
+          if (tf) img.style.transform = tf;
+          box.appendChild(img);
+          vid.appendChild(box);
+        });
+        card.appendChild(vid);
+      }
+      const info = document.createElement('div'); info.className = 'mcard-info';
+      if (cut.merged) {
+        if (textOf(cut.context)) {
+          const f = document.createElement('div'); f.className = 'mcard-text'; f.innerHTML = cut.context;
+          info.appendChild(f);
+        }
+      } else {
+        textCols.forEach(col => {
+          const val = cut[col.id];
+          if (!val || !textOf(val)) return;
+          const f = document.createElement('div'); f.className = 'mcard-field';
+          const lab = document.createElement('div'); lab.className = 'mcard-label'; lab.textContent = col.label;
+          const body = document.createElement('div'); body.className = 'mcard-text'; body.innerHTML = val;
+          f.append(lab, body);
+          info.appendChild(f);
+        });
+      }
+      if (info.children.length) card.appendChild(info);
+      if (card.children.length) feed.appendChild(card);
+    });
+  }
+}
+
 /* ---------- 렌더 ---------- */
 function renderAll(keepCaret = true) {
+  if (mobileView) {
+    applyAutoHl();
+    applyDimLines();
+    buildMobileFeed();
+    return;
+  }
+  const oldFeed = $('#mfeed');
+  if (oldFeed) { oldFeed.remove(); pagesEl.style.display = ''; }
   const cap = keepCaret ? captureCaret() : null;
   const st = editorScroll.scrollTop, sl = editorScroll.scrollLeft;
   applyAutoHl();
@@ -1862,7 +1973,7 @@ const CMT_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" st
 /* 댓글이 있는 행: 행 우상단(우변에 딱 붙게)에 플랫 아이콘+개수 배지를 상시 표시 */
 function refreshCommentChips() {
   $$('#pages .cmt-chip').forEach(x => x.remove());
-  if (!cmtEnabled()) return;
+  if (!cmtEnabled() || mobileView) return;
   const z = zoomFactor();
   const seen = new Set();
   $$('#pages tr[data-cut-id]').forEach(tr => {
@@ -3854,7 +3965,7 @@ function updateRemoteGroup(g, p, z, pr, col) {
 function renderRemote() {
   const layer = pagesEl.querySelector('#remote-layer');
   /* 커서·캐럿은 최근 활동자만 — 자리 비운 사람 커서가 문서에 남지 않게 */
-  const list = cloudRole === 'off' ? [] : othersFresh().filter(([id, p]) => p.film === currentFilm && isLiveP(p));
+  const list = (cloudRole === 'off' || mobileView) ? [] : othersFresh().filter(([id, p]) => p.film === currentFilm && isLiveP(p));
   if (!list.length) { if (layer) layer.remove(); return; }
   const L = ensureRemoteLayer();
   const z = zoomFactor();
@@ -4223,6 +4334,7 @@ function enterViewerMode() {
     bootDone();
   });
   subscribePresence();
+  updateMobileView();
   if (pendingNewFilm) { $('#login-modal').hidden = false; $('#li-err').textContent = '새 작품을 추가하려면 로그인하세요'; }
   viewerUnsub = () => {
     ref.off('value', handler);
@@ -4272,6 +4384,7 @@ async function enterEditorMode() {
     sendPresence();
   } catch (e) {}
   renderAll(false);
+  updateMobileView();
   if (pendingNewFilm) createNewFilm();
 }
 async function doLogin() {
