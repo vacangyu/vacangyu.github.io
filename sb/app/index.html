@@ -455,7 +455,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 02:29";
+const BUILD_ID = "2026-08-19 02:38";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -536,6 +536,16 @@ function locateCut(id) {
     if (i >= 0) return { block: b, index: i };
   }
   return null;
+}
+/* 드래그·팬 등 상호작용 진행 중 여부 — 이때 재렌더/원격 병합이 DOM을 갈아엎으면
+   드래그 세션이 중간에 끊기므로, 상호작용이 끝날 때까지 연기한다 */
+function isInteracting() {
+  return !!(typeof imgDrag !== 'undefined' && imgDrag) ||
+    !!(typeof cutDrag !== 'undefined' && cutDrag) ||
+    !!(typeof colMoveDrag !== 'undefined' && colMoveDrag) ||
+    !!(typeof colDrag !== 'undefined' && colDrag) ||
+    !!(typeof photoPan !== 'undefined' && photoPan) ||
+    !!(typeof mfigDrag !== 'undefined' && mfigDrag);
 }
 /* 로컬 모델 리비전 — 발행/원격병합의 비동기 구간 중 변경 감지용.
    스냅숏 이후 modelRev가 움직였다면 그 스냅숏으로 모델을 덮어쓰면 안 된다(유실). */
@@ -959,7 +969,7 @@ const scheduleRender = debounce(() => {
      셀에 포커스가 있고 최근 1.2초 내 입력이 있으면 타이핑 흐름을 끊지 않도록 추가 연기 */
   const typingInCell = document.activeElement && document.activeElement.closest &&
     document.activeElement.closest('.cell[contenteditable="true"]') && Date.now() - lastInputTs < 1200;
-  if (composing || Date.now() - lastCompEnd < 350 || typingInCell) { scheduleRender(); return; }
+  if (composing || Date.now() - lastCompEnd < 350 || typingInCell || isInteracting()) { scheduleRender(); return; }
   renderAll(true);
 }, 700);
 
@@ -1324,10 +1334,29 @@ function transformDim(html) {
   });
   return d.innerHTML;
 }
-function applyDimLines() {
-  const ids = docCols()
+function dimColIds() {
+  return docCols()
     .filter(col => col.kind === 'text' && (col.id === 'c' || /^next$/i.test((col.label || '').trim())))
     .map(col => col.id);
+}
+/* 타이핑 즉시(재렌더 전) 흐림 반영 — 캐럿에 안전한 블록(div/p) 클래스 토글만 수행,
+   <br> 줄의 인라인 감싸기는 다음 전체 변환(transformDim)이 처리 */
+function quickDimCell(cell) {
+  let line = 0, contentSeen = false;
+  [...cell.childNodes].forEach(n => {
+    if (n.nodeType === 1 && /^(DIV|P)$/i.test(n.tagName)) {
+      if (contentSeen || line > 0) line++;
+      n.classList.toggle('dim-rest', line > 0);
+      if (!n.getAttribute('class')) n.removeAttribute('class');
+      contentSeen = true;
+      return;
+    }
+    if (n.nodeType === 1 && n.tagName === 'BR') { line++; contentSeen = true; return; }
+    if ((n.textContent || '').trim()) contentSeen = true;
+  });
+}
+function applyDimLines() {
+  const ids = dimColIds();
   if (!ids.length) return;
   for (const b of doc.blocks) {
     if (b.type !== 'board') continue;
@@ -2343,6 +2372,8 @@ async function loadLocalFonts() {
 pagesEl.addEventListener('input', e => {
   const cell = e.target.closest ? e.target.closest('.cell[contenteditable="true"]') : null;
   if (!cell) return;
+  /* C#·Next 열: 두 번째 줄이 생기는 순간 바로 흐림 스타일 적용 */
+  if (!cell.classList.contains('mcell') && dimColIds().includes(cell.dataset.f)) quickDimCell(cell);
   /* (구조·사진 조작 undo는 타이핑 후에도 유효하므로 스택을 비우지 않는다) */
   syncCell(cell);
   if (!composing) scheduleRender();
@@ -4021,8 +4052,9 @@ function drainRemote() {
   drainTimer = setTimeout(() => {
     drainTimer = null;
     if (!pendingRemote || cloudRole !== 'editor') return;
-    /* 어떤 로컬 조작이든(타이핑·사진 붙여넣기·드래그) 직후엔 적용 연기 */
-    if (composing || Date.now() - lastInputTs < 400 || Date.now() - lastMutTs < 600) { drainRemote(); return; }
+    /* 어떤 로컬 조작이든(타이핑·사진 붙여넣기·드래그 진행 중) 직후엔 적용 연기 —
+       특히 드래그 중 재렌더는 드래그 세션을 끊는다 */
+    if (composing || isInteracting() || Date.now() - lastInputTs < 400 || Date.now() - lastMutTs < 600) { drainRemote(); return; }
     const remoteStr = pendingRemote;
     pendingRemote = null;
     collabQueue(async () => {
@@ -4054,7 +4086,7 @@ async function publishNow() {
   if (cloudRole !== 'editor' || !fb) return;
   /* 한글 IME: 발행의 전체 문서 직렬화(수 MB JSON)가 메인 스레드를 점유해
      조합 중 잰크로 자모가 씹힘 — 조합이 끝난 뒤, 그리고 타이핑이 잠시 멎은 뒤로 미룸 */
-  if (composing || Date.now() - lastInputTs < 350) { schedulePublish(); return; }
+  if (composing || isInteracting() || Date.now() - lastInputTs < 350) { schedulePublish(); return; }
   try {
     setSyncStatus('saving');
     const ok = await collabQueue(async () => {
