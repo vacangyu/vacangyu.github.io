@@ -118,7 +118,7 @@ body.following #follow-pill{display:block}
 .cast-color{width:26px;height:22px;border:none;padding:0;background:none;cursor:pointer}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
-.dim-rest{color:#a1a1aa} /* C#·Next 열 2행 이후 흐림 */
+.dim-rest{color:#a1a1aa;font-size:calc(1em - 1pt);font-style:italic} /* C#·Next 열 첫 줄 제외: 흐림 + 1pt 축소 + 이탤릭 */
 .ratio-item{display:flex;align-items:center;gap:6px}
 .ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
 /* 행/열 드래그 이동 표시 */
@@ -455,7 +455,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 02:25";
+const BUILD_ID = "2026-08-19 02:29";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
