@@ -267,6 +267,7 @@ tr.cut td:last-child{position:relative}
         <button class="pitem eo" id="b-save">저장<span class="kbd">⌘S</span></button>
         <button class="pitem" id="b-pdf">PDF 내보내기</button>
         <button class="pitem eo" id="b-export" title="현재 문서 상태(텍스트·이미지 포함)를 기본값으로 내장한 새 HTML 파일을 다운로드합니다">index_n.html 내보내기</button>
+        <button class="pitem eo" id="b-backup" title="이 기기에 30초 간격으로 저장된 최근 20개 스냅숏 중 하나로 복구">로컬 백업 복구…</button>
       </div>
     </div>
     <div class="menu eo">
@@ -397,7 +398,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 00:57";
+const BUILD_ID = "2026-08-19 01:09";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -468,8 +469,14 @@ function locateCut(id) {
   }
   return null;
 }
+/* 로컬 모델 리비전 — 발행/원격병합의 비동기 구간 중 변경 감지용.
+   스냅숏 이후 modelRev가 움직였다면 그 스냅숏으로 모델을 덮어쓰면 안 된다(유실). */
+let modelRev = 0;
+let lastMutTs = 0;
 function markDirty() {
   dirty = true;
+  modelRev++;
+  lastMutTs = Date.now();
   if (cloudRole === 'editor') schedulePublish();
 }
 
@@ -1301,7 +1308,7 @@ async function addCutImages(cutId, fileList) {
   const files = [...(fileList || [])].filter(f => f.type && f.type.startsWith('image/'));
   if (!files.length) return;
   for (const f of files) {
-    try { cut.imgs.push({ src: await downscaleImage(f), fit: 'contain' }); }
+    try { cut.imgs.push({ id: uid(), src: await downscaleImage(f), fit: 'contain' }); }
     catch (e) { toast(e.message); }
   }
   markDirty();
@@ -1705,6 +1712,7 @@ function normalizeFilm(f) {
       if (!c.id) c.id = uid();
       if (!Array.isArray(c.imgs)) c.imgs = c.img ? [c.img] : [];
       c.imgs = c.imgs.map(x => (typeof x === 'string' ? { src: x, fit: 'contain' } : x));
+      c.imgs.forEach(im => { if (im && !im.id) im.id = uid(); }); /* 사진 고유 id — 동시 편집 병합용 */
       delete c.img;
     });
   });
@@ -2721,6 +2729,7 @@ $('#b-pdf').addEventListener('click', () => {
   setTimeout(() => window.print(), 350);
 });
 $('#b-export').addEventListener('click', exportBakedHtml);
+$('#b-backup').addEventListener('click', restoreBackupUI);
 $('#b-open').addEventListener('click', () => {
   if (dirty && !confirm('저장하지 않은 변경사항이 있습니다. 계속할까요?')) return;
   $('#file-open').click();
@@ -3275,6 +3284,13 @@ function mergeById(base, local, remote, mergeItem) {
   });
   return out;
 }
+/* 사진 배열 병합 — id가 전부 있으면 사진 단위 3-way(동시 추가/편집 모두 보존), 없으면 통짜 비교 */
+function mergeImgs(b, l, r) {
+  b = b || []; l = l || []; r = r || [];
+  const hasIds = a => a.every(x => x && x.id);
+  if (!hasIds(b) || !hasIds(l) || !hasIds(r)) return pick3(b, l, r) || [];
+  return mergeById(b, l, r, (bi, li, ri) => pick3(bi, li, ri));
+}
 function mergeCut(b, l, r) {
   b = b || {};
   const out = { ...l };
@@ -3285,7 +3301,7 @@ function mergeCut(b, l, r) {
     const v = pick3(b[k], l[k], r[k]);
     if (v === undefined) delete out[k]; else out[k] = v;
   }
-  out.imgs = pick3(b.imgs, l.imgs, r.imgs) || [];
+  out.imgs = mergeImgs(b.imgs, l.imgs, r.imgs) || [];
   return out;
 }
 function mergeBlock(b, l, r) {
@@ -3329,14 +3345,18 @@ function mergeDocs(baseS, localS, remoteS) {
     return JSON.stringify({ ...L, films });
   } catch (e) { return remoteS || localS; }
 }
-/* 병합 결과를 로컬 모델에 반영 — 캐럿·스크롤 보존 */
-async function applyMergedToModel(mergedStr) {
-  const full = await restoreDoc(mergedStr);
+/* 병합 결과를 로컬 모델에 반영 — 캐럿·스크롤 보존.
+   rev0 이후 로컬이 변경되었다면 덮어쓰지 않고 false 반환(유실 방지). */
+async function applyMergedToModel(mergedStr, rev0) {
+  const full = await restoreDoc(mergedStr); /* 이미지 다운로드 등 비동기 — 이 사이 로컬이 바뀔 수 있다 */
+  if (rev0 !== undefined && rev0 !== modelRev) return false;
   const cap = captureCaret();
   applyRemote(full);
   if (cap) restoreCaret(cap);
+  return true;
 }
-/* 편집 중 원격 문서 수신: 타이핑·IME 조합 중엔 미루고, 한가할 때 병합 적용 */
+let collabDelayHook = null; /* 테스트에서 경쟁 상황을 재현하기 위한 지연 훅 */
+/* 편집 중 원격 문서 수신: 타이핑·IME 조합·사진 조작 중엔 미루고, 한가할 때 병합 적용 */
 function editorApplyRemote(remoteStr) {
   pendingRemote = remoteStr;
   drainRemote();
@@ -3346,17 +3366,32 @@ function drainRemote() {
   drainTimer = setTimeout(() => {
     drainTimer = null;
     if (!pendingRemote || cloudRole !== 'editor') return;
-    if (composing || Date.now() - lastInputTs < 400) { drainRemote(); return; }
+    /* 어떤 로컬 조작이든(타이핑·사진 붙여넣기·드래그) 직후엔 적용 연기 */
+    if (composing || Date.now() - lastInputTs < 400 || Date.now() - lastMutTs < 600) { drainRemote(); return; }
     const remoteStr = pendingRemote;
     pendingRemote = null;
     collabQueue(async () => {
       if (cloudRole !== 'editor') return;
-      if (remoteStr === baseStr) return; /* 내 발행의 echo */
-      const { docJson: localStr } = await stripDoc(serialize());
-      const merged = mergeDocs(baseStr, localStr, remoteStr);
-      baseStr = remoteStr;
-      if (merged !== localStr) await applyMergedToModel(merged);
-      if (merged !== remoteStr) { dirty = true; schedulePublish(); } /* 서버보다 앞섬 → 발행으로 전파 */
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (remoteStr === baseStr) return; /* 내 발행의 echo */
+        const rev0 = modelRev;
+        const { docJson: localStr } = await stripDoc(serialize());
+        if (collabDelayHook) await collabDelayHook('remote:afterStrip');
+        if (modelRev !== rev0) continue; /* 스냅숏이 이미 낡음 — 다시 */
+        const merged = mergeDocs(baseStr, localStr, remoteStr);
+        if (merged === localStr) {
+          /* 원격 내용이 이미 로컬에 모두 있음 */
+          baseStr = remoteStr;
+          if (merged !== remoteStr) { dirty = true; schedulePublish(); }
+          return;
+        }
+        if (!(await applyMergedToModel(merged, rev0))) continue; /* 적용 직전 로컬 변경 감지 — 재병합 */
+        baseStr = remoteStr; /* 반영 성공 후에만 base 전진 (base ⊆ 모델 불변식 유지) */
+        if (merged !== remoteStr) { dirty = true; schedulePublish(); } /* 서버보다 앞섬 → 발행으로 전파 */
+        return;
+      }
+      /* 시도 소진 — 원격을 버리지 않고 다시 큐에 (로컬은 그대로 보존됨) */
+      if (!pendingRemote) { pendingRemote = remoteStr; drainRemote(); }
     });
   }, 150);
 }
@@ -3367,23 +3402,42 @@ async function publishNow() {
   if (composing) { schedulePublish(); return; }
   try {
     setSyncStatus('saving');
-    await collabQueue(async () => {
-      const { docJson: localStr, newImages } = await stripDoc(serialize());
-      for (const [h, data] of newImages) {
-        await boardRef('images/' + h).set(data);
-        uploadedHashes.add(h);
+    const ok = await collabQueue(async () => {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const rev0 = modelRev;
+        const { docJson: localNow, newImages } = await stripDoc(serialize());
+        for (const [h, data] of newImages) {
+          await boardRef('images/' + h).set(data); /* 사진이 많으면 수 초 걸림 — 이 사이 로컬이 바뀔 수 있다 */
+          uploadedHashes.add(h);
+        }
+        if (collabDelayHook) await collabDelayHook('publish:afterUpload');
+        if (modelRev !== rev0) continue; /* 업로드 중 붙여넣은 사진 등 — 최신 상태로 처음부터 재시도 */
+        let published = localNow;
+        await boardRef('doc').transaction(cur => {
+          published = (cur && cur !== localNow) ? mergeDocs(baseStr, localNow, cur) : localNow;
+          return published;
+        }, undefined, false);
+        if (published === localNow) {
+          /* 서버 = 방금의 로컬 스냅숏. 이후 로컬 변경은 base보다 앞서 있어 안전 */
+          baseStr = published;
+          if (modelRev !== rev0) continue; /* 발행 사이 생긴 변경 즉시 이어서 발행 */
+          return true;
+        }
+        /* 원격 변경이 병합됨 — 로컬이 그대로일 때만 모델에 반영. 아니면 base를 옮기지 않고 재병합 */
+        if (modelRev !== rev0) continue;
+        if (await applyMergedToModel(published, rev0)) {
+          baseStr = published;
+          return true;
+        }
       }
-      let published = localStr;
-      await boardRef('doc').transaction(cur => {
-        published = (cur && cur !== localStr) ? mergeDocs(baseStr, localStr, cur) : localStr;
-        return published;
-      }, undefined, false);
-      baseStr = published;
-      if (published !== localStr) await applyMergedToModel(published);
+      schedulePublish(); /* 시도 소진 — 변경은 모델에 안전하게 남아 있고 잠시 후 재발행 */
+      return false;
     });
-    await boardRef('meta').set({ updatedAt: Date.now(), current: currentFilm });
-    dirty = false; /* 클라우드 저장 완료 = 저장된 상태 (창 닫기 경고 해제) */
-    setSyncStatus('saved');
+    if (ok) {
+      await boardRef('meta').set({ updatedAt: Date.now(), current: currentFilm });
+      dirty = false; /* 클라우드 저장 완료 = 저장된 상태 (창 닫기 경고 해제) */
+      setSyncStatus('saved');
+    }
   } catch (e) {
     setSyncStatus('error');
     setTimeout(() => { if (cloudRole === 'editor') schedulePublish(); }, 8000);
@@ -3396,6 +3450,62 @@ function schedulePublish() {
   if (!pubT) pubDeadline = now + 6000;
   clearTimeout(pubT);
   pubT = setTimeout(() => { pubT = null; publishNow(); }, Math.min(2000, Math.max(0, pubDeadline - now)));
+}
+
+/* ---------- 로컬 스냅숏 백업 (IndexedDB) ----------
+   클라우드와 무관하게 변경분을 기기에 지속 저장 — 어떤 동기화 사고에도
+   파일 → "로컬 백업 복구…"로 최근 20개 시점 중 하나로 되돌릴 수 있다. */
+let bkDb = null;
+let bkLastRev = -1;
+(function backupInit() {
+  try {
+    const req = indexedDB.open('sb-backup', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('snap', { keyPath: 'ts' }); };
+    req.onsuccess = () => { bkDb = req.result; };
+  } catch (e) {}
+})();
+function backupTick() {
+  if (!bkDb || isViewer()) return;
+  if (modelRev === bkLastRev) return;                      /* 변경 없으면 저장 안 함 */
+  if (composing || Date.now() - lastMutTs < 2000) return;  /* 직렬화 잰크 방지 — 한가할 때만 */
+  bkLastRev = modelRev;
+  try {
+    const json = serialize();
+    const tx = bkDb.transaction('snap', 'readwrite');
+    const st = tx.objectStore('snap');
+    st.put({ ts: Date.now(), film: currentFilm, rev: modelRev, json });
+    const kq = st.getAllKeys();
+    kq.onsuccess = () => {
+      const keys = kq.result || [];
+      if (keys.length > 20) keys.slice(0, keys.length - 20).forEach(k => st.delete(k));
+    };
+  } catch (e) {}
+}
+setInterval(backupTick, 30000);
+window.addEventListener('beforeunload', () => { try { lastMutTs = 0; backupTick(); } catch (e) {} });
+function backupList() {
+  return new Promise(res => {
+    if (!bkDb) return res([]);
+    try {
+      const rq = bkDb.transaction('snap').objectStore('snap').getAll();
+      rq.onsuccess = () => res((rq.result || []).sort((a, b) => b.ts - a.ts));
+      rq.onerror = () => res([]);
+    } catch (e) { res([]); }
+  });
+}
+async function restoreBackupUI() {
+  const snaps = await backupList();
+  if (!snaps.length) { toast('저장된 로컬 백업이 없습니다'); return; }
+  const menu = snaps.slice(0, 12).map((s, i) => (i + 1) + ') ' + fmtCmtTs(s.ts) + ' — ' + (s.film || '')).join('\n');
+  const pick = prompt('복구할 백업 번호를 입력하세요 (최신순):\n' + menu);
+  const n = parseInt(pick, 10);
+  if (!n || !snaps[n - 1]) return;
+  if (!confirm(fmtCmtTs(snaps[n - 1].ts) + ' 시점의 로컬 백업으로 전체 문서를 되돌릴까요?\n이 백업 내용이 현재 클라우드 내용보다 우선 반영됩니다.')) return;
+  try {
+    loadDocFromJSON(snaps[n - 1].json);
+    markDirty();
+    toast('백업으로 복구했습니다' + (cloudRole === 'editor' ? ' — 클라우드로 발행됩니다' : ''));
+  } catch (e) { toast('복구 실패: ' + e.message); }
 }
 function applyRemote(fullJson) {
   const keepFilm = currentFilm;
@@ -3602,12 +3712,16 @@ window.__sb = {
     get redoDepth() { return editRedo.length; }
   },
   collab: {
-    mergeDocs, pick3, mergeById, editorApplyRemote, drainRemote,
+    mergeDocs, pick3, mergeById, mergeImgs, editorApplyRemote, drainRemote, publishNow,
     get base() { return baseStr; },
     set base(v) { baseStr = v; },
     get pending() { return pendingRemote; },
+    get rev() { return modelRev; },
+    setDelayHook(fn) { collabDelayHook = fn; },
+    setFb(f) { fb = f; },
     queue: collabQueue
   },
+  backup: { tick: backupTick, list: backupList },
   follow: {
     setFollow, jump: jumpToUser,
     applyPresence(id, v) { presences[id] = v; refreshPresenceUI(); },
