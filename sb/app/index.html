@@ -143,6 +143,7 @@ td.c-v{vertical-align:middle}
 td.c-ctx,td.c-n,td.c-x{cursor:text}
 .vstack{display:flex;flex-direction:column;gap:2mm;margin:1.5mm;align-items:center}
 .vbox{position:relative;width:100%;aspect-ratio:var(--vratio,1.5);background:#fff;overflow:hidden}
+.vbox:not(.empty){border:0.15mm solid #1a1a1a} /* 사진 테두리 — 표 선(0.3mm)의 절반 */
 .vbox img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff}
 td.c-v.drag{box-shadow:inset 0 0 0 2.5px #6ba3e8}
 .clip{position:relative;overflow:hidden;width:100%}
@@ -176,7 +177,7 @@ td.c-v:hover .vimport{display:block}
 /* ---------- 합쳐진 행(메모 셀) ---------- */
 tr.mrow .mcell{min-height:14mm}
 .mfig{display:block;width:100%;position:relative;margin:1.2mm 0}
-.mfig img{display:block;height:auto;user-select:none;-webkit-user-drag:none;cursor:grab}
+.mfig img{display:block;height:auto;user-select:none;-webkit-user-drag:none;cursor:grab;border:0.15mm solid #1a1a1a}
 .mfig.fsel img{outline:2px solid #2563eb;outline-offset:-2px}
 .mfig.fresize img{outline:2px dashed #2563eb;outline-offset:-2px}
 .mfh{position:absolute;width:10px;height:10px;background:#fff;border:1.5px solid #2563eb;border-radius:3px;z-index:7;cursor:nwse-resize}
@@ -396,13 +397,14 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 00:49";
+const BUILD_ID = "2026-08-19 00:57";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
    block: {id,type:'title',text,sub} | {id,type:'board',cuts[]}
    cut:   {id,s,c,img,context,notes}  (텍스트 필드는 HTML 문자열)
    ============================================================ */
+const IS_MAC = /Mac|iP/.test(navigator.platform || '');
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -1611,7 +1613,8 @@ function renderCmtPanel() {
   }
   cmtPanel.appendChild(wrap);
   const form = document.createElement('div'); form.className = 'cmt-form';
-  const ta = document.createElement('textarea'); ta.className = 'cmt-input'; ta.placeholder = '댓글 작성… (⌘↵ 등록)'; ta.rows = 2;
+  const ta = document.createElement('textarea'); ta.className = 'cmt-input';
+  ta.placeholder = '댓글 작성… (' + (IS_MAC ? '⌘↵' : 'Ctrl+Enter') + ' 등록)'; ta.rows = 2;
   ta.value = draft;
   const send = document.createElement('button'); send.className = 'cmt-send'; send.textContent = '등록';
   send.addEventListener('click', () => submitCmt(ta));
@@ -1632,10 +1635,16 @@ function submitCmt(ta) {
   const c = { text, name, ts: Date.now() };
   if (cloudRole === 'editor' && myUid) c.uid = myUid;
   else c.vid = myVid();
+  /* 즉시 비움 — set()의 로컬 에코가 패널을 재구축하며 드래프트를 보존하므로,
+     비우기는 재구축 전에 해야 한다. 실패 시 현재 입력창에 복원 */
+  ta.value = '';
   try {
     boardRef('comments/' + cmtOpen + '/c' + uid()).set(c)
-      .then(() => { ta.value = ''; })
-      .catch(() => toast('댓글 저장 실패 — Firebase 규칙에서 comments 쓰기 허용이 필요합니다'));
+      .catch(() => {
+        const cur = cmtPanel.querySelector('.cmt-input');
+        if (cur && !cur.value) cur.value = text;
+        toast('댓글 저장 실패 — Firebase 규칙에서 comments 쓰기 허용이 필요합니다');
+      });
   } catch (err) {}
 }
 document.addEventListener('click', e => {
@@ -2120,9 +2129,16 @@ pagesEl.addEventListener('click', e => {
     selectVideoCell(tv);
     return;
   }
+  /* 사진 셀 안에서 누르기 시작한 클릭이 살짝 끌리면 mouseup이 조상 요소에서 끝나
+     click 타깃이 셀 밖이 된다 — 이 경우엔 선택을 풀지 않는다 */
+  if (pressStartedInVideo) return;
   selectVideoCell(null); /* 다른 곳 클릭 → 선택 해제 */
   clearMfig();
 });
+let pressStartedInVideo = false;
+pagesEl.addEventListener('pointerdown', e => {
+  pressStartedInVideo = !!(e.target.closest && e.target.closest('td.c-v'));
+}, true);
 /* 합쳐진 행 이미지: 이동(드래그) 및 모서리 리사이즈 */
 let mfigDrag = null;
 pagesEl.addEventListener('pointerdown', e => {
@@ -3522,8 +3538,10 @@ if (BUILD_ID) {
   requestAnimationFrame(() => bt.classList.add('show'));
   setTimeout(() => { bt.classList.remove('show'); setTimeout(() => bt.remove(), 600); }, 4500);
   /* 브라우저 HTML 캐시(10분)로 구버전이 뜨는 문제 방지 —
-     서버의 최신 빌드 번호를 확인해 다르면 캐시를 우회해 1회 자동 새로고침 */
-  setTimeout(async () => {
+     로드 직후 + 탭 복귀 시 + 10분 주기로 서버 빌드를 확인해,
+     다르면 캐시를 우회해 자동 새로고침 (미저장 변경 중엔 안내만) */
+  let updNotified = '';
+  async function checkForUpdate() {
     try {
       const appUrl = IN_SB ? '/sb/app/' : location.pathname;
       const res = await fetch(appUrl, { cache: 'no-store' });
@@ -3533,13 +3551,25 @@ if (BUILD_ID) {
       if (!m || m[1] === BUILD_ID) return;
       const guard = 'sb_reloaded_' + m[1];
       if (sessionStorage.getItem(guard)) return; /* 무한 새로고침 방지 */
+      if (dirty || composing) {
+        if (updNotified !== m[1]) { updNotified = m[1]; toast('새 버전(' + m[1] + ')이 배포되었습니다 — 저장되면 자동 새로고침됩니다'); }
+        return; /* 가드는 세우지 않음 — 저장 후 다음 체크에서 새로고침 */
+      }
       sessionStorage.setItem(guard, '1');
-      if (dirty) { toast('새 버전(' + m[1] + ')이 배포되었습니다 — 저장이 끝나면 새로고침하세요'); return; }
       const idx = Object.keys(films).indexOf(currentFilm) + 1;
       location.replace(IN_SB ? '/sb/app/?f=' + idx + '&v=' + Date.now()
                              : location.pathname + '?v=' + Date.now());
     } catch (e) {}
-  }, 2500);
+  }
+  setTimeout(checkForUpdate, 2500);
+  setInterval(checkForUpdate, 10 * 60 * 1000);
+  let lastVisCheck = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastVisCheck < 60000) return;
+    lastVisCheck = Date.now();
+    setTimeout(checkForUpdate, 800);
+  });
 }
 
 /* 클로드/샌드박스 미리보기 환경 안내 */
