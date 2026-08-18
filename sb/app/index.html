@@ -39,7 +39,7 @@ body{
 .hlstate.on{color:#16a34a}
 /* ---------- 뷰어(읽기 전용) 모드 ---------- */
 body.viewer .eo,body.viewer #bar-menu .sep,body.viewer #side-actions,body.viewer #rowtools,
-body.viewer .vimport,body.viewer .vtools,body.viewer .vzoom{display:none !important}
+body.viewer .vtools,body.viewer .vzoom{display:none !important}
 body.viewer .cell,body.viewer td.c-ctx,body.viewer td.c-n,body.viewer td.c-x,body.viewer td.c-v{cursor:default}
 body.viewer .thumb{cursor:pointer}
 /* ---------- 로그인 모달 ---------- */
@@ -92,7 +92,9 @@ body.following #follow-pill{display:block}
 #remote-layer .rc-chat{position:absolute;display:none;left:13px;top:32px;max-width:240px;color:#fff;font-size:12px;line-height:1.35;padding:5px 10px;border-radius:12px 12px 12px 3px;white-space:pre-wrap;word-break:break-word;transition:opacity .8s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 #remote-layer .rc-chat.fading{opacity:0}
 /* ---------- 부트 로딩 오버레이 ---------- */
-#boot-overlay{position:fixed;inset:0;background:#fff;z-index:400;display:flex;align-items:center;justify-content:center}
+/* 부트 로딩: 앱 뼈대(툴바·사이드바)는 그대로 두고 용지 영역만 가림 */
+#boot-overlay{position:absolute;inset:0;background:#ececf0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding-top:110px}
+.bootlabel{margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center}
 #boot-overlay[hidden]{display:none}
 .bootbox{text-align:center}
 .bootspin{width:22px;height:22px;border:2.5px solid #e4e4e7;border-top-color:#18181b;border-radius:50%;margin:0 auto;animation:bspin .8s linear infinite}
@@ -116,6 +118,15 @@ body.following #follow-pill{display:block}
 .cast-color{width:26px;height:22px;border:none;padding:0;background:none;cursor:pointer}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
+.ratio-item{display:flex;align-items:center;gap:6px}
+.ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
+/* 행/열 드래그 이동 표시 */
+tr.drop-row-before td{box-shadow:inset 0 2.5px 0 #2563eb}
+tr.drop-row-after td{box-shadow:inset 0 -2.5px 0 #2563eb}
+td.drop-col-before{box-shadow:inset 2.5px 0 0 #2563eb}
+td.drop-col-after{box-shadow:inset -2.5px 0 0 #2563eb}
+.tool-handle{cursor:grab}
+.tool-handle:active{cursor:grabbing}
 #cast-add{width:calc(100% - 8px);margin:3px 4px 4px;text-align:left}
 .selbtn{display:inline-flex;align-items:center;gap:5px}
 .selcur{max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
@@ -143,7 +154,7 @@ body.side-collapsed #sidebar > *{display:none}
 .thumb:hover .page{box-shadow:0 0 0 4px #a1a1aa}
 #thumbs img{-webkit-user-drag:none}
 
-#editor-scroll{flex:1;overflow:auto;min-width:0;touch-action:pan-x pan-y}
+#editor-scroll{flex:1;overflow:auto;min-width:0;touch-action:pan-x pan-y;position:relative}
 #pages{position:relative;width:max-content;margin:0 auto;padding:28px;display:flex;flex-direction:column;gap:26px}
 
 /* ---------- 페이지 ---------- */
@@ -188,9 +199,6 @@ td.c-v.drop-into{outline:2px dashed #2563eb;outline-offset:-2px}
 .vzoom input{flex:1;min-width:40px}
 .vzlab{font-size:10px;color:#3f3f46;min-width:30px;text-align:right;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 td.c-v.sel{box-shadow:inset 0 0 0 2px #18181b}
-.vimport{position:absolute;left:50%;bottom:2mm;transform:translateX(-50%);height:25px;padding:0 12px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.9);border-radius:0;cursor:pointer;display:none;font-size:11.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#3f3f46;box-shadow:none;white-space:nowrap;z-index:4;transition:background .13s ease}
-.vimport:hover{background:rgba(0,0,0,.10)}
-td.c-v:hover .vimport{display:block}
 
 /* ---------- 제목 페이지 ---------- */
 .tp-inner{width:82%;text-align:center}
@@ -217,11 +225,10 @@ tr.mrow .mcell{min-height:14mm}
 #coltools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
 #coltools button:disabled{opacity:.3;cursor:default;background:transparent}
 /* 댓글 — 행 오른쪽 끝 버튼(Win8 스타일) + 개수 칩 + 패널 */
-#cmt-btn{position:fixed;z-index:50;height:22px;min-width:28px;padding:0 6px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.9);color:#3f3f46;border-radius:0;cursor:pointer;font-size:10.5px;line-height:1;transition:background .13s ease}
+#cmt-btn{position:fixed;z-index:50;height:22px;width:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.85);color:#3f3f46;border-radius:0;cursor:pointer;padding:0;transition:background .13s ease}
 #cmt-btn:hover{background:rgba(0,0,0,.10)}
 #cmt-btn.hidden{display:none}
-tr.cut td:last-child{position:relative}
-.cmt-chip{position:absolute;top:1mm;right:1mm;z-index:5;height:17px;padding:0 5px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.9);color:#3f3f46;border-radius:0;cursor:pointer;font-size:9.5px;line-height:1}
+.cmt-chip{position:absolute;z-index:6;height:22px;display:flex;align-items:center;gap:4px;padding:0 7px 0 6px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.85);color:#3f3f46;border-radius:0;cursor:pointer;font-size:10.5px;line-height:1;transition:background .13s ease}
 .cmt-chip:hover{background:rgba(0,0,0,.10)}
 #cmt-panel{position:fixed;z-index:120;width:288px;background:#fff;border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:12.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
 #cmt-panel.hidden{display:none}
@@ -303,6 +310,13 @@ tr.cut td:last-child{position:relative}
         <button class="pitem" id="b-localfonts" title="이 컴퓨터의 폰트 목록 불러오기 (Chrome/Edge)">로컬 폰트 불러오기</button>
       </div>
     </div>
+    <div class="menu">
+      <button class="mbtn" data-menu>보기</button>
+      <div class="pop" style="min-width:230px">
+        <button class="pitem eo" id="b-view-setdefault" title="내 화면의 용지 방향·열 너비를 문서 기본값으로 저장 — 모든 사용자의 기본 보기가 됩니다">현재 보기를 문서 기본값으로 저장</button>
+        <button class="pitem" id="b-view-reset" title="용지 방향·열 너비 개인 설정을 지우고 문서 기본값으로 되돌립니다">내 보기를 기본값으로 되돌리기</button>
+      </div>
+    </div>
     <div class="sep"></div>
     <div class="menu eo">
       <button class="mbtn selbtn" title="선택 영역 또는 문서 기본 폰트"><span class="selcur" id="s-font-cur">고딕 (시스템 기본)</span><span class="chev">⌄</span></button>
@@ -353,7 +367,6 @@ tr.cut td:last-child{position:relative}
 
 <div id="follow-frame"></div>
 <button id="follow-pill">편집자를 따라가는 중 · 클릭하여 중지</button>
-<div id="boot-overlay" hidden><div class="bootbox"><div class="bootspin"></div></div></div>
 
 <div id="profile-modal" class="modalwrap" hidden>
   <div class="modal">
@@ -396,29 +409,27 @@ tr.cut td:last-child{position:relative}
     </div>
     <div id="thumbs"></div>
   </aside>
-  <div id="editor-scroll"><div id="pages"></div></div>
+  <div id="editor-scroll"><div id="pages"></div><div id="boot-overlay" hidden><div class="bootbox"><div class="bootspin"></div><div class="bootlabel">문서 불러오는 중…</div></div></div></div>
 </div>
 
 <div id="coltools" class="hidden noprint">
-  <button data-act="left" title="열을 왼쪽으로 이동">◀</button>
-  <button data-act="right" title="열을 오른쪽으로 이동">▶</button>
+  <button data-act="drag" class="tool-handle" draggable="true" title="끌어서 열 위치 이동">⠿</button>
+  <button data-act="rename" title="열 이름 수정">✎</button>
   <button data-act="add" title="오른쪽에 새 열 추가">＋</button>
   <button data-act="del" title="열 삭제">✕</button>
 </div>
 
 <div id="rowtools" class="hidden noprint">
-  <button data-act="up" title="컷 위로">↑</button>
-  <button data-act="down" title="컷 아래로">↓</button>
-  <button data-act="add" title="아래에 컷 추가">＋</button>
-  <button data-act="dup" title="컷 복제">⧉</button>
-  <button data-act="merge" title="한 칸으로 합치기 — 빈 컷만 가능하며 되돌릴 수 없음 (씬 상단 메모·사진용)">⊞</button>
+  <button data-act="drag" class="tool-handle" draggable="true" title="끌어서 컷 위치 이동">⠿</button>
+  <button data-act="add" title="아래에 컷 추가 (다중 열)">＋</button>
+  <button data-act="addm" title="아래에 단일 열(전체 폭) 셀 추가 — 씬 메모·사진용">⊞</button>
+  <button data-act="mergedown" title="아래 컷과 합치기 — 아래 컷의 내용이 이 컷 뒤에 이어 붙습니다">⤓</button>
   <button data-act="del" title="컷 삭제">✕</button>
 </div>
 
 <div id="measure"></div>
 <div id="toast" class="hidden"></div>
 <input type="file" id="file-open" accept=".json,application/json" hidden>
-<input type="file" id="file-img" accept="image/*" multiple hidden>
 
 <script>
 'use strict';
@@ -443,7 +454,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 02:02";
+const BUILD_ID = "2026-08-19 02:19";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -593,13 +604,6 @@ function buildVideoTd(cut, measure) {
   const tv = document.createElement('td'); tv.className = 'c-v'; tv.dataset.cutId = cut.id;
   if (!measure && state.imgTarget === cut.id) tv.classList.add('sel');
   tv.appendChild(buildVideoStack(cut, measure));
-  if (!measure) {
-    const ib = document.createElement('button');
-    ib.className = 'vimport noprint';
-    ib.textContent = '＋ 사진 가져오기';
-    ib.title = '파일에서 사진 추가 · 셀을 클릭해 선택한 뒤 ⌘V로 붙여넣기도 가능';
-    tv.appendChild(ib);
-  }
   return tv;
 }
 /* 반전·확대·이동을 합친 이미지 transform */
@@ -1015,7 +1019,7 @@ function updatePageStyle() {
   ahState.textContent = doc.settings.autoHl ? '켬' : '끔';
   ahState.classList.toggle('on', !!doc.settings.autoHl);
   const rc = $('#s-ratio-cur');
-  if (rc) rc.textContent = doc.settings.videoRatio || '3:2';
+  if (rc) rc.textContent = doc.settings.photoMode === 'contain' ? '원본' : (doc.settings.videoRatio || '3:2');
   renderRatioPop();
   renderCastPop();
 }
@@ -1453,7 +1457,7 @@ async function addCutImages(cutId, fileList) {
   const files = [...(fileList || [])].filter(f => f.type && f.type.startsWith('image/'));
   if (!files.length) return;
   for (const f of files) {
-    try { cut.imgs.push({ id: uid(), src: await downscaleImage(f), fit: 'contain' }); }
+    try { cut.imgs.push({ id: uid(), src: await downscaleImage(f), fit: (doc.settings.photoMode && doc.settings.photoMode !== 'contain') ? 'cover' : 'contain' }); }
     catch (e) { toast(e.message); }
   }
   markDirty();
@@ -1493,15 +1497,26 @@ function cutAction(act, cutId) {
   else if (act === 'add') {
     const p = cuts[index];
     cuts.splice(index + 1, 0, newCut(textOf(p.s), nextC(textOf(p.c))));
-  } else if (act === 'dup') {
-    cuts.splice(index + 1, 0, { ...cuts[index], id: uid(), imgs: (cuts[index].imgs || []).map(x => ({ ...x })) });
-  } else if (act === 'merge') {
-    const c = cuts[index];
-    if (c.merged || textOf(c.context) || textOf(c.notes) || (c.imgs && c.imgs.length)) return;
-    if (!confirm('이 행을 한 칸으로 합칠까요? 합친 뒤에는 다시 나눌 수 없습니다.')) return;
-    const keep = { s: c.s, c: c.c, imgs: c.imgs, merged: c.merged };
-    c.merged = true; c.s = ''; c.c = ''; c.imgs = [];
-    pushOp(() => { c.s = keep.s; c.c = keep.c; c.imgs = keep.imgs; if (keep.merged) c.merged = keep.merged; else delete c.merged; });
+  } else if (act === 'addm') {
+    /* 단일 열(전체 폭) 셀 추가 — 씬 메모·사진용 */
+    cuts.splice(index + 1, 0, { ...newCut('', ''), merged: true });
+  } else if (act === 'mergedown') {
+    if (index >= cuts.length - 1) { toast('아래에 합칠 컷이 없습니다'); return; }
+    const a = cuts[index], b2 = cuts[index + 1];
+    if (a.merged || b2.merged) { toast('단일 열 셀은 합칠 수 없습니다'); return; }
+    if (!confirm('아래 컷과 합칠까요? 아래 컷의 텍스트·사진이 이 컷 뒤에 이어 붙습니다.')) return;
+    const keepAll = { ...a, imgs: (a.imgs || []).slice() };
+    const joinHtml = (x, y) => (x && y) ? x + '<div><br></div>' + y : (x || y || '');
+    docCols().forEach(col => {
+      if (col.kind === 'text' && col.id !== 's' && col.id !== 'c') a[col.id] = joinHtml(a[col.id], b2[col.id]);
+    });
+    a.imgs = (a.imgs || []).concat(b2.imgs || []);
+    cuts.splice(index + 1, 1);
+    pushOp(() => {
+      restoreCuts();
+      for (const k of Object.keys(a)) delete a[k];
+      Object.assign(a, keepAll);
+    });
     markDirty(); hideRowtools(); renderAll(false);
     return;
   } else if (act === 'del') {
@@ -1566,10 +1581,11 @@ function showRowtools(tr) {
   rowtools.dataset.cutId = tr.dataset.cutId;
   const loc = locateCut(tr.dataset.cutId);
   const cut = loc && loc.block.cuts[loc.index];
-  const mb = rowtools.querySelector('[data-act="merge"]');
-  const mergeable = cut && !cut.merged && !textOf(cut.context) && !textOf(cut.notes) && !(cut.imgs && cut.imgs.length);
-  mb.disabled = !mergeable;
-  mb.style.opacity = mergeable ? '' : '.3';
+  const md = rowtools.querySelector('[data-act="mergedown"]');
+  const below = loc && loc.block.cuts[loc.index + 1];
+  const canMd = cut && below && !cut.merged && !below.merged;
+  md.disabled = !canMd;
+  md.style.opacity = canMd ? '' : '.3';
   rowtools.classList.remove('hidden');
   const rect = tr.getBoundingClientRect();
   const rw = rowtools.offsetWidth || 26;
@@ -1586,8 +1602,6 @@ function showColtools(td) {
   const ix = +td.dataset.ix;
   const cols = docCols();
   coltools.dataset.ix = ix;
-  coltools.querySelector('[data-act="left"]').disabled = ix === 0;
-  coltools.querySelector('[data-act="right"]').disabled = ix === cols.length - 1;
   const del = coltools.querySelector('[data-act="del"]');
   del.disabled = cols[ix].kind === 'video';
   del.title = cols[ix].kind === 'video' ? 'Video 열은 삭제할 수 없습니다' : '열 삭제';
@@ -1598,20 +1612,60 @@ function showColtools(td) {
   coltools.style.top = Math.max(44, rect.top - h) + 'px'; /* 헤더 셀 바로 위 */
 }
 function hideColtools() { coltools.classList.add('hidden'); }
+/* 헤더 셀 인라인 이름 편집 — 전체선택 상태로 시작, Enter/바깥 클릭 확정, Esc 취소 */
+function startColRename(ix) {
+  const span = pagesEl.querySelector('.page .hdr .hcell[data-ix="' + ix + '"] span');
+  const col = docCols()[ix];
+  if (!span || !col) return;
+  hideColtools();
+  const old = col.label;
+  span.contentEditable = 'true';
+  span.focus();
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(span);
+    const s = getSelection();
+    s.removeAllRanges(); s.addRange(r);
+  } catch (e) {}
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    span.contentEditable = 'false';
+    const nv = (span.textContent || '').trim();
+    if (commit && nv && nv !== old) {
+      pushOp(() => { col.label = old; });
+      col.label = nv;
+      markDirty();
+    }
+    renderAll(false); /* 모든 페이지의 헤더 갱신/원복 */
+  };
+  span.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  span.addEventListener('blur', () => finish(true), { once: true });
+}
 function colAction(act, ix) {
   const cols = docCols(), pct = doc.settings.colPct;
   const rc = snapArray(cols), rp = snapArray(pct); /* 변경 전 스냅숏 */
-  const swap = (a, i, j) => { const t = a[i]; a[i] = a[j]; a[j] = t; };
-  if (act === 'left' && ix > 0) { swap(cols, ix, ix - 1); swap(pct, ix, ix - 1); }
-  else if (act === 'right' && ix < cols.length - 1) { swap(cols, ix, ix + 1); swap(pct, ix, ix + 1); }
-  else if (act === 'add') {
-    const label = (prompt('새 열의 이름을 입력하세요') || '').trim();
-    if (!label) return;
-    cols.splice(ix + 1, 0, { id: 'col_' + uid(), label, kind: 'text' });
+  if (act === 'rename') { startColRename(ix); return; }
+  if (act === 'add') {
+    cols.splice(ix + 1, 0, { id: 'col_' + uid(), label: '새 열', kind: 'text' });
     const w = 12; /* 새 열 12%, 기존 열은 비례 축소 */
     for (let i = 0; i < pct.length; i++) pct[i] = pct[i] * (100 - w) / 100;
     pct.splice(ix + 1, 0, w);
-  } else if (act === 'del') {
+    pushOp(() => { rc(); rp(); delete vp().colPct; saveViewPrefs(); });
+    delete vp().colPct;
+    saveViewPrefs();
+    hideColtools();
+    markDirty();
+    renderAll(false);
+    startColRename(ix + 1); /* 바로 이름 입력 (전체선택 상태) */
+    return;
+  }
+  if (act === 'del') {
     if (cols[ix].kind === 'video') return;
     if (cols.length <= 2) { toast('최소 두 개의 열이 필요합니다'); return; }
     if (!confirm(`"${cols[ix].label}" 열을 삭제할까요?\n이 열의 내용은 더 이상 표시되지 않습니다.`)) return;
@@ -1634,6 +1688,52 @@ coltools.addEventListener('click', e => {
 coltools.addEventListener('mouseleave', e => {
   if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#editor-scroll')) return;
   hideColtools();
+});
+/* --- 열 드래그 이동: 열 도구의 핸들을 끌어서 --- */
+let colMoveDrag = null;
+function clearColDropHints() {
+  $$('#pages td.drop-col-before, #pages td.drop-col-after').forEach(t => t.classList.remove('drop-col-before', 'drop-col-after'));
+}
+coltools.addEventListener('dragstart', e => {
+  const h = e.target.closest ? e.target.closest('[data-act="drag"]') : null;
+  if (!h) { e.preventDefault(); return; }
+  colMoveDrag = { ix: +coltools.dataset.ix };
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', 'sb-col'); } catch (err) {}
+});
+coltools.addEventListener('dragend', () => { colMoveDrag = null; clearColDropHints(); hideColtools(); });
+pagesEl.addEventListener('dragover', e => {
+  if (!colMoveDrag) return;
+  const hc = e.target.closest ? e.target.closest('td.hcell') : null;
+  clearColDropHints();
+  if (!hc) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const r = hc.getBoundingClientRect();
+  hc.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-col-before' : 'drop-col-after');
+});
+pagesEl.addEventListener('drop', e => {
+  if (!colMoveDrag) return;
+  const from = colMoveDrag.ix;
+  colMoveDrag = null;
+  clearColDropHints();
+  const hc = e.target.closest ? e.target.closest('td.hcell') : null;
+  if (!hc) return;
+  e.preventDefault();
+  const cols = docCols(), pct = doc.settings.colPct;
+  const r = hc.getBoundingClientRect();
+  let to = +hc.dataset.ix + (e.clientX >= r.left + r.width / 2 ? 1 : 0);
+  if (to > from) to--;
+  if (to === from) return;
+  const rc = snapArray(cols), rp = snapArray(pct);
+  cols.splice(to, 0, cols.splice(from, 1)[0]);
+  pct.splice(to, 0, pct.splice(from, 1)[0]);
+  pushOp(() => { rc(); rp(); delete vp().colPct; saveViewPrefs(); });
+  delete vp().colPct;
+  saveViewPrefs();
+  markDirty();
+  hideColtools();
+  renderAll(false);
 });
 
 /* ---------- 댓글 (컷 단위 · 뷰어도 작성 가능) ---------- */
@@ -1678,10 +1778,12 @@ function subscribeComments() {
     if (cmtOpen) renderCmtPanel();
   });
 }
-/* 댓글이 있는 행의 마지막 셀에 개수 칩 표시 (재렌더 후 다시 붙임) */
+const CMT_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+/* 댓글이 있는 행: 행 우상단(우변에 딱 붙게)에 플랫 아이콘+개수 배지를 상시 표시 */
 function refreshCommentChips() {
   $$('#pages .cmt-chip').forEach(x => x.remove());
   if (!cmtEnabled()) return;
+  const z = zoomFactor();
   const seen = new Set();
   $$('#pages tr[data-cut-id]').forEach(tr => {
     const id = tr.dataset.cutId;
@@ -1689,25 +1791,29 @@ function refreshCommentChips() {
     seen.add(id);
     const n = cmtCount(id);
     if (!n) return;
-    const td = tr.lastElementChild;
-    if (!td) return;
+    const pg = tr.closest('.page');
+    if (!pg) return;
+    const pr = pg.getBoundingClientRect();
+    const rr = tr.getBoundingClientRect();
     const chip = document.createElement('button');
     chip.className = 'cmt-chip noprint';
-    chip.textContent = '💬' + n;
+    chip.innerHTML = CMT_ICON + '<span>' + n + '</span>';
     chip.title = '댓글 보기';
+    chip.style.left = (rr.right - pr.left) / z + 'px';
+    chip.style.top = (rr.top - pr.top) / z + 'px';
     chip.addEventListener('click', e => { e.stopPropagation(); openCmtPanel(id, chip.getBoundingClientRect()); });
-    td.appendChild(chip);
+    pg.appendChild(chip);
   });
 }
 function showCmtBtn(tr) {
   if (!cmtEnabled()) return;
   const id = tr.dataset.cutId;
+  if (cmtCount(id)) { hideCmtBtn(); return; } /* 댓글 있는 행은 상시 배지가 이미 있음 */
   cmtBtn.dataset.cutId = id;
-  const n = cmtCount(id);
-  cmtBtn.textContent = n ? '💬' + n : '💬＋';
+  cmtBtn.innerHTML = CMT_ICON;
   const r = tr.getBoundingClientRect();
   cmtBtn.classList.remove('hidden');
-  cmtBtn.style.left = Math.min(r.right + 4, innerWidth - 44) + 'px'; /* 행 오른쪽 변 끝 */
+  cmtBtn.style.left = Math.min(r.right, innerWidth - 30) + 'px'; /* 행 우변에 딱 붙게 */
   cmtBtn.style.top = Math.max(44, r.top) + 'px';
 }
 function hideCmtBtn() { cmtBtn.classList.add('hidden'); }
@@ -1944,7 +2050,7 @@ function switchFilm(name) {
   applyDocVars();
   updatePageStyle();
   renderAll(false);
-  editorScroll.scrollTop = 0;
+  restoreViewState(); /* 이 작품에서 마지막으로 보던 위치로 */
   syncUrlToFilm();
   if (cloudRole === 'editor') publishPresence();
 }
@@ -1961,11 +2067,27 @@ function syncUrlToFilm() {
 }
 function applyUrlFilm() {
   const names = Object.keys(films);
-  const name = names[urlFilmIndex - 1];
+  let name = names[urlFilmIndex - 1];
+  /* URL에 작품 지정이 없으면 마지막으로 보던 작품으로 */
+  if (!name && viewPrefs._lastFilm && films[viewPrefs._lastFilm]) name = viewPrefs._lastFilm;
   urlFilmIndex = 0;
   if (name && name !== currentFilm) switchFilm(name);
-  else syncUrlToFilm();
+  else { syncUrlToFilm(); restoreViewState(); }
 }
+/* 마지막으로 본 위치(스크롤·배율) 저장/복원 — 작품별 개인 설정 */
+function restoreViewState() {
+  const v = vp().scroll;
+  if (v && v.zoom) setZoom(v.zoom);
+  editorScroll.scrollTop = v ? (v.ty || 0) * zoomFactor() : 0;
+}
+const saveViewState = debounce(() => {
+  if (followUid || !bootDone.applied) return;
+  const z = zoomFactor();
+  vp().scroll = { ty: Math.round(editorScroll.scrollTop / z), zoom: Math.round(z * 100) };
+  viewPrefs._lastFilm = currentFilm;
+  saveViewPrefs();
+}, 500);
+editorScroll.addEventListener('scroll', saveViewState);
 /* /sb 메인 페이지의 "새 작품 추가" → 로그인 후 이름을 받아 생성 */
 function createNewFilm() {
   pendingNewFilm = false;
@@ -2075,13 +2197,13 @@ function syncFontUI() {
 }
 /* ---------- 화면비 ---------- */
 const RATIOS = [
-  ['3:2 · 비스타비전', '3:2'],
+  ['1.85:1 · 플랫 비스타비전', '1.85:1'],
+  ['2.39:1 · 시네마스코프', '2.39:1'],
   ['16:9', '16:9'],
-  ['1.85:1 · 플랫', '1.85:1'],
-  ['2.39:1 · 스코프', '2.39:1'],
   ['4:3', '4:3'],
+  ['3:2', '3:2'],
   ['1:1', '1:1'],
-  ['9:16 · 세로', '9:16']
+  ['9:16 · 버티컬', '9:16']
 ];
 function parseRatio(s) {
   const m = /^([\d.]+)\s*[:x\/]\s*([\d.]+)$/.exec(String(s || '').trim());
@@ -2091,18 +2213,41 @@ function parseRatio(s) {
   }
   return 1.5;
 }
-function pickRatio(v) {
-  doc.settings.videoRatio = v;
-  applyDocVars();
-  updatePageStyle();
-  markDirty();
-  renderAll(false);
-}
-function bulkFit(fit) {
+function allImgs() {
+  const out = [];
   for (const b of doc.blocks) {
     if (b.type !== 'board') continue;
-    b.cuts.forEach(c => (c.imgs || []).forEach(x => { x.fit = fit; }));
+    b.cuts.forEach(c => (c.imgs || []).forEach(x => out.push(x)));
   }
+  return out;
+}
+/* 현재 선택된 옵션에 모든 사진이 일치하는지 — 개별 조절(원본/크롭/확대/이동)이 있으면 mixed */
+function photoModeState() {
+  const mode = doc.settings.photoMode || null; /* 'contain' | ratio 문자열 */
+  if (!mode) return { mode: null, mixed: false };
+  const want = mode === 'contain' ? 'contain' : 'cover';
+  const mixed = allImgs().some(x =>
+    (x.fit || 'contain') !== want || (x.zoom && x.zoom !== 1) || x.ox || x.oy ||
+    (want === 'cover' && mode !== (doc.settings.videoRatio || '')));
+  return { mode, mixed };
+}
+/* 옵션 선택 = 본문의 모든 사진을 해당 비율 크롭(또는 원본)으로 일괄 전환 */
+function applyPhotoMode(mode) {
+  const imgs = allImgs();
+  const snap = imgs.map(x => ({ x, fit: x.fit, zoom: x.zoom, ox: x.ox, oy: x.oy }));
+  const prev = { ratio: doc.settings.videoRatio, mode: doc.settings.photoMode };
+  pushOp(() => {
+    snap.forEach(v => { v.x.fit = v.fit; v.x.zoom = v.zoom; v.x.ox = v.ox; v.x.oy = v.oy; });
+    doc.settings.videoRatio = prev.ratio;
+    doc.settings.photoMode = prev.mode;
+    applyDocVars();
+  });
+  doc.settings.photoMode = mode;
+  const want = mode === 'contain' ? 'contain' : 'cover';
+  if (mode !== 'contain') doc.settings.videoRatio = mode;
+  imgs.forEach(x => { x.fit = want; x.zoom = 1; x.ox = 0; x.oy = 0; });
+  applyDocVars();
+  updatePageStyle();
   markDirty();
   renderAll(false);
 }
@@ -2110,20 +2255,18 @@ function renderRatioPop() {
   const pop = $('#s-ratio-pop');
   if (!pop) return;
   pop.innerHTML = '';
-  RATIOS.forEach(([label, val]) => {
+  const st = photoModeState();
+  const items = [...RATIOS, ['사진 원본 (레터박스)', 'contain']];
+  items.forEach(([label, val]) => {
     const b = document.createElement('button');
-    b.className = 'pitem' + (val === (doc.settings.videoRatio || '3:2') ? ' on' : '');
-    b.textContent = label;
-    b.addEventListener('click', () => pickRatio(val));
-    pop.appendChild(b);
-  });
-  const h = document.createElement('div'); h.className = 'pophead'; h.textContent = '모든 사진 일괄 적용';
-  pop.appendChild(h);
-  [['전체 크롭 (화면비에 맞춤)', 'cover'], ['전체 원본 비율 (레터박스)', 'contain']].forEach(([label, fit]) => {
-    const b = document.createElement('button');
-    b.className = 'pitem';
-    b.textContent = label;
-    b.addEventListener('click', () => bulkFit(fit));
+    b.className = 'pitem ratio-item';
+    const mark = document.createElement('span');
+    mark.className = 'ratio-mark';
+    mark.textContent = st.mode === val ? (st.mixed ? '−' : '✓') : '';
+    const tx = document.createElement('span');
+    tx.textContent = label;
+    b.append(mark, tx);
+    b.addEventListener('click', () => applyPhotoMode(val));
     pop.appendChild(b);
   });
 }
@@ -2294,12 +2437,6 @@ pagesEl.addEventListener('click', e => {
     const key = { cutId: td.dataset.cutId, ix: +zb.dataset.ix };
     state.zoomUI = state.zoomUI && state.zoomUI.cutId === key.cutId && state.zoomUI.ix === key.ix ? null : key;
     renderAll(false);
-    return;
-  }
-  const ib = e.target.closest ? e.target.closest('.vimport') : null;
-  if (ib) {
-    selectVideoCell(ib.closest('td.c-v'));
-    $('#file-img').click();
     return;
   }
   const tv = e.target.closest ? e.target.closest('td.c-v') : null;
@@ -2547,10 +2684,6 @@ async function copySelectedImage() {
     toast('사진 복사됨');
   } catch (e) { toast('복사 실패 — 브라우저 클립보드 권한을 확인하세요'); }
 }
-$('#file-img').addEventListener('change', e => {
-  if (e.target.files.length && state.imgTarget) addCutImages(state.imgTarget, e.target.files);
-  e.target.value = '';
-});
 pagesEl.addEventListener('dragover', e => {
   if (isViewer()) return;
   const tv = e.target.closest ? e.target.closest('td.c-v') : null;
@@ -2660,7 +2793,57 @@ rowtools.addEventListener('mouseleave', e => {
 });
 rowtools.addEventListener('click', e => {
   const b = e.target.closest('button');
-  if (b) cutAction(b.dataset.act, rowtools.dataset.cutId);
+  if (b && b.dataset.act !== 'drag') cutAction(b.dataset.act, rowtools.dataset.cutId);
+});
+
+/* --- 행(컷) 드래그 이동: 행 도구의 핸들을 끌어서 --- */
+let cutDrag = null;
+function clearRowDropHints() {
+  $$('#pages tr.drop-row-before, #pages tr.drop-row-after').forEach(t => t.classList.remove('drop-row-before', 'drop-row-after'));
+}
+rowtools.addEventListener('dragstart', e => {
+  const h = e.target.closest ? e.target.closest('[data-act="drag"]') : null;
+  if (!h) { e.preventDefault(); return; }
+  cutDrag = { cutId: rowtools.dataset.cutId };
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', 'sb-cut'); } catch (err) {}
+});
+rowtools.addEventListener('dragend', () => { cutDrag = null; clearRowDropHints(); hideRowtools(); });
+pagesEl.addEventListener('dragover', e => {
+  if (!cutDrag) return;
+  const tr = e.target.closest ? e.target.closest('tr[data-cut-id]') : null;
+  clearRowDropHints();
+  if (!tr) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const r = tr.getBoundingClientRect();
+  tr.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-row-before' : 'drop-row-after');
+});
+pagesEl.addEventListener('drop', e => {
+  if (!cutDrag) return;
+  const src = cutDrag;
+  cutDrag = null;
+  clearRowDropHints();
+  const tr = e.target.closest ? e.target.closest('tr[data-cut-id]') : null;
+  if (!tr || tr.dataset.cutId === src.cutId) return;
+  e.preventDefault();
+  const sLoc = locateCut(src.cutId);
+  if (!sLoc) return;
+  const after = e.clientY >= tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+  const snapS = snapArray(sLoc.block.cuts);
+  const [cut] = sLoc.block.cuts.splice(sLoc.index, 1);
+  const dLoc = locateCut(tr.dataset.cutId);
+  if (!dLoc) { sLoc.block.cuts.splice(sLoc.index, 0, cut); return; }
+  const snapD = dLoc.block.cuts === sLoc.block.cuts ? null : snapArray(dLoc.block.cuts);
+  dLoc.block.cuts.splice(dLoc.index + (after ? 1 : 0), 0, cut);
+  pushOp(() => {
+    /* 스냅숏은 이동 전 원본 배열 상태 기준 — 목적지 스냅숏은 삽입 전이므로 그대로 복원 */
+    if (snapD) snapD();
+    snapS();
+  });
+  markDirty();
+  hideRowtools();
+  renderAll(false);
 });
 
 /* --- 열 너비 드래그 (전 페이지 공통) --- */
@@ -2844,6 +3027,25 @@ $('#b-autohl').addEventListener('click', () => {
 });
 
 $('#b-localfonts').addEventListener('click', loadLocalFonts);
+$('#b-view-setdefault').addEventListener('click', () => {
+  doc.settings.orientation = effOri();
+  doc.settings.colPct = [...effColPct()];
+  markDirty();
+  toast('현재 보기(용지 방향·열 너비)를 문서 기본값으로 저장했습니다');
+});
+$('#b-view-reset').addEventListener('click', () => {
+  delete vp().ori;
+  delete vp().colPct;
+  saveViewPrefs();
+  updatePageStyle();
+  renderAll(false);
+  toast('내 보기를 문서 기본값으로 되돌렸습니다');
+});
+/* 화면비 메뉴를 열 때마다 체크(✓/−) 상태 재계산 */
+(() => {
+  const cur = $('#s-ratio-cur');
+  if (cur) cur.closest('.menu').querySelector('.mbtn').addEventListener('click', renderRatioPop);
+})();
 
 $('#b-ori').addEventListener('click', () => {
   /* 용지 방향은 개인 보기 설정 — 다른 사용자에게 전파되지 않음 */
@@ -2874,6 +3076,7 @@ function setZoom(v) {
   $('#zoom-val').textContent = v + '%';
   $('#b-zoom').textContent = v + '%';
   hideRowtools();
+  saveViewState(); /* 마지막 보기 상태(배율) 기억 */
   if (cloudRole === 'editor') publishPresence();
 }
 $('#zoom').addEventListener('input', e => setZoom(+e.target.value));
