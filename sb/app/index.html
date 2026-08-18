@@ -191,6 +191,34 @@ tr.mrow .mcell{min-height:14mm}
 #coltools button:hover{background:rgba(0,0,0,.10)}
 #coltools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
 #coltools button:disabled{opacity:.3;cursor:default;background:transparent}
+/* 댓글 — 행 오른쪽 끝 버튼(Win8 스타일) + 개수 칩 + 패널 */
+#cmt-btn{position:fixed;z-index:50;height:22px;min-width:28px;padding:0 6px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.9);color:#3f3f46;border-radius:0;cursor:pointer;font-size:10.5px;line-height:1;transition:background .13s ease}
+#cmt-btn:hover{background:rgba(0,0,0,.10)}
+#cmt-btn.hidden{display:none}
+tr.cut td:last-child{position:relative}
+.cmt-chip{position:absolute;top:1mm;right:1mm;z-index:5;height:17px;padding:0 5px;border:1px solid rgba(0,0,0,.12);background:rgba(232,232,235,.9);color:#3f3f46;border-radius:0;cursor:pointer;font-size:9.5px;line-height:1}
+.cmt-chip:hover{background:rgba(0,0,0,.10)}
+#cmt-panel{position:fixed;z-index:120;width:288px;background:#fff;border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:12.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+#cmt-panel.hidden{display:none}
+.cmt-head{font-weight:600;padding:9px 12px;border-bottom:1px solid #f4f4f5;display:flex;justify-content:space-between;align-items:center}
+.cmt-x{border:none;background:none;cursor:pointer;color:#a1a1aa;font-size:12px;padding:2px}
+.cmt-x:hover{color:#18181b}
+.cmt-list{max-height:240px;overflow:auto;padding:2px 0}
+.cmt-item{padding:7px 12px}
+.cmt-item+.cmt-item{border-top:1px solid #fafafa}
+.cmt-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;gap:8px}
+.cmt-name{font-weight:600}
+.cmt-time{color:#a1a1aa;font-size:10.5px;white-space:nowrap}
+.cmt-text{white-space:pre-wrap;word-break:break-word;color:#3f3f46}
+.cmt-acts{margin-top:4px;display:flex;gap:10px}
+.cmt-acts button{border:none;background:none;color:#71717a;cursor:pointer;font-size:11px;padding:0;font-family:inherit}
+.cmt-acts button:hover{color:#18181b;text-decoration:underline}
+.cmt-empty{padding:14px;color:#a1a1aa;text-align:center}
+.cmt-form{display:flex;gap:6px;padding:9px 12px;border-top:1px solid #f4f4f5;align-items:flex-end}
+.cmt-input{flex:1;resize:none;border:1px solid #e4e4e7;border-radius:7px;padding:6px 8px;font-family:inherit;font-size:12.5px;min-height:34px}
+.cmt-input:focus{outline:none;border-color:#a1a1aa}
+.cmt-send{border:none;background:#18181b;color:#fff;border-radius:7px;height:28px;padding:0 12px;cursor:pointer;font-size:12px;font-family:inherit}
+.cmt-send:hover{background:#3f3f46}
 #rowtools button{width:22px;height:22px;border:none;background:transparent;color:#3f3f46;cursor:pointer;border-radius:0;font-size:12px;line-height:1;padding:0;transition:background .13s ease}
 #rowtools button:hover{background:rgba(0,0,0,.10)}
 #rowtools button:active{background:rgba(0,0,0,.18);transition-duration:.05s}
@@ -353,7 +381,8 @@ const SELF_HTML = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
    1) console.firebase.google.com 에서 새 프로젝트 생성
    2) Authentication → Sign-in method → 이메일/비밀번호 사용 설정 → Users 탭에서 내 계정 추가
    3) Realtime Database 생성 → 규칙 탭에 아래 붙여넣기 후 게시:
-      { "rules": { "boards": { "$b": { ".read": true, ".write": "auth != null" } } } }
+      { "rules": { "boards": { "$b": { ".read": true, ".write": "auth != null",
+        "comments": { ".write": true } } } } }
    4) 프로젝트 설정(톱니) → 내 앱 → 웹 앱 추가 → firebaseConfig 객체를 아래에 붙여넣기
    5) Authentication → Settings → 승인된 도메인에 배포 도메인(gyu.dev) 추가
    FIREBASE_CONFIG가 null이면 앱은 기존처럼 로컬 전용으로 동작합니다. */
@@ -367,7 +396,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 00:35";
+const BUILD_ID = "2026-08-19 00:44";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -776,6 +805,7 @@ function renderAll(keepCaret = true) {
   editorScroll.scrollTop = st; editorScroll.scrollLeft = sl;
   if (cap) restoreCaret(cap);
   scheduleThumbs();
+  refreshCommentChips();
 }
 const scheduleRender = debounce(() => {
   /* 한글 IME: 조합 중·직후의 재렌더는 조합을 끊어 자모가 유실됨 — 뒤로 미룸.
@@ -1308,6 +1338,7 @@ function cutAction(act, cutId) {
   } else if (act === 'del') {
     if (hasContent(cuts[index]) && !confirm('이 컷을 삭제할까요?')) return;
     cuts.splice(index, 1);
+    if (fb && cloudRole === 'editor') { try { boardRef('comments/' + cutId).remove(); } catch (e) {} }
   } else return;
   markDirty();
   hideRowtools();
@@ -1426,6 +1457,191 @@ coltools.addEventListener('mouseleave', e => {
   if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#editor-scroll')) return;
   hideColtools();
 });
+
+/* ---------- 댓글 (컷 단위 · 뷰어도 작성 가능) ---------- */
+let comments = {};   /* cutId → {commentId: {text, name, ts, uid?, vid?, edited?}} */
+let cmtOpen = null;  /* 열려 있는 패널의 cutId */
+const cmtBtn = document.createElement('button');
+cmtBtn.id = 'cmt-btn'; cmtBtn.className = 'hidden noprint'; cmtBtn.title = '댓글';
+document.body.appendChild(cmtBtn);
+const cmtPanel = document.createElement('div');
+cmtPanel.id = 'cmt-panel'; cmtPanel.className = 'hidden noprint';
+document.body.appendChild(cmtPanel);
+function myVid() {
+  let v = null;
+  try {
+    v = localStorage.getItem('sb_vid');
+    if (!v) { v = 'v' + uid(); localStorage.setItem('sb_vid', v); }
+  } catch (e) { v = 'v-session'; }
+  return v;
+}
+function commenterName() {
+  if (cloudRole === 'editor' && myName) return myName;
+  let n = null;
+  try { n = localStorage.getItem('sb_vname'); } catch (e) {}
+  if (!n) {
+    n = (prompt('댓글에 표시할 이름을 입력하세요') || '').trim();
+    if (!n) return null;
+    try { localStorage.setItem('sb_vname', n); } catch (e) {}
+  }
+  return n;
+}
+function canEditCmt(c) {
+  if (cloudRole === 'editor') return !!c.uid && c.uid === myUid; /* 수정은 작성자만 */
+  return !!c.vid && c.vid === myVid();
+}
+function canDelCmt(c) { return cloudRole === 'editor' || canEditCmt(c); } /* 삭제는 편집자 + 작성자 */
+function cmtCount(cutId) { return Object.keys(comments[cutId] || {}).length; }
+function cmtEnabled() { return !!fb; }
+function subscribeComments() {
+  boardRef('comments').on('value', snap => {
+    comments = snap.val() || {};
+    refreshCommentChips();
+    if (cmtOpen) renderCmtPanel();
+  });
+}
+/* 댓글이 있는 행의 마지막 셀에 개수 칩 표시 (재렌더 후 다시 붙임) */
+function refreshCommentChips() {
+  $$('#pages .cmt-chip').forEach(x => x.remove());
+  if (!cmtEnabled()) return;
+  const seen = new Set();
+  $$('#pages tr[data-cut-id]').forEach(tr => {
+    const id = tr.dataset.cutId;
+    if (seen.has(id)) return;
+    seen.add(id);
+    const n = cmtCount(id);
+    if (!n) return;
+    const td = tr.lastElementChild;
+    if (!td) return;
+    const chip = document.createElement('button');
+    chip.className = 'cmt-chip noprint';
+    chip.textContent = '💬' + n;
+    chip.title = '댓글 보기';
+    chip.addEventListener('click', e => { e.stopPropagation(); openCmtPanel(id, chip.getBoundingClientRect()); });
+    td.appendChild(chip);
+  });
+}
+function showCmtBtn(tr) {
+  if (!cmtEnabled()) return;
+  const id = tr.dataset.cutId;
+  cmtBtn.dataset.cutId = id;
+  const n = cmtCount(id);
+  cmtBtn.textContent = n ? '💬' + n : '💬＋';
+  const r = tr.getBoundingClientRect();
+  cmtBtn.classList.remove('hidden');
+  cmtBtn.style.left = Math.min(r.right + 4, innerWidth - 44) + 'px'; /* 행 오른쪽 변 끝 */
+  cmtBtn.style.top = Math.max(44, r.top) + 'px';
+}
+function hideCmtBtn() { cmtBtn.classList.add('hidden'); }
+cmtBtn.addEventListener('click', () => openCmtPanel(cmtBtn.dataset.cutId, cmtBtn.getBoundingClientRect()));
+cmtBtn.addEventListener('mouseleave', e => {
+  if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#editor-scroll, #cmt-panel')) return;
+  hideCmtBtn();
+});
+function openCmtPanel(cutId, anchor) {
+  if (!cutId) return;
+  cmtOpen = cutId;
+  cmtPanel.classList.remove('hidden');
+  cmtPanel.style.left = Math.max(8, Math.min(anchor.left, innerWidth - 296)) + 'px';
+  cmtPanel.style.top = Math.max(44, Math.min(anchor.bottom + 4, innerHeight - 340)) + 'px';
+  renderCmtPanel();
+  const ta = cmtPanel.querySelector('.cmt-input');
+  if (ta) ta.focus();
+}
+function closeCmtPanel() { cmtOpen = null; cmtPanel.classList.add('hidden'); }
+function fmtCmtTs(ts) {
+  const d = new Date(ts || 0);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function renderCmtPanel() {
+  const prev = cmtPanel.querySelector('.cmt-input');
+  const draft = prev ? prev.value : '';
+  const hadFocus = prev && document.activeElement === prev;
+  const list = comments[cmtOpen] || {};
+  const ids = Object.keys(list).sort((a, b) => (list[a].ts || 0) - (list[b].ts || 0));
+  cmtPanel.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'cmt-head';
+  const ht = document.createElement('span'); ht.textContent = '댓글' + (ids.length ? ' ' + ids.length : '');
+  const x = document.createElement('button'); x.className = 'cmt-x'; x.textContent = '✕'; x.title = '닫기';
+  x.addEventListener('click', closeCmtPanel);
+  head.append(ht, x);
+  cmtPanel.appendChild(head);
+  const wrap = document.createElement('div'); wrap.className = 'cmt-list';
+  ids.forEach(id => {
+    const c = list[id] || {};
+    const it = document.createElement('div'); it.className = 'cmt-item';
+    const meta = document.createElement('div'); meta.className = 'cmt-meta';
+    const nm = document.createElement('span'); nm.className = 'cmt-name'; nm.textContent = c.name || '익명';
+    const tm = document.createElement('span'); tm.className = 'cmt-time'; tm.textContent = fmtCmtTs(c.ts) + (c.edited ? ' · 수정됨' : '');
+    meta.append(nm, tm);
+    const body = document.createElement('div'); body.className = 'cmt-text'; body.textContent = c.text || '';
+    it.append(meta, body);
+    const acts = document.createElement('div'); acts.className = 'cmt-acts';
+    if (canEditCmt(c)) {
+      const eb = document.createElement('button'); eb.textContent = '수정';
+      eb.addEventListener('click', () => {
+        const t = prompt('댓글 수정', c.text || '');
+        if (t === null) return;
+        const nt = t.trim();
+        if (!nt) return;
+        try {
+          boardRef('comments/' + cmtOpen + '/' + id).update({ text: nt, edited: true })
+            .catch(() => toast('댓글 수정 실패 — 권한을 확인하세요'));
+        } catch (err) {}
+      });
+      acts.appendChild(eb);
+    }
+    if (canDelCmt(c)) {
+      const db = document.createElement('button'); db.textContent = '삭제';
+      db.addEventListener('click', () => {
+        if (!confirm('이 댓글을 삭제할까요?')) return;
+        try {
+          boardRef('comments/' + cmtOpen + '/' + id).remove()
+            .catch(() => toast('댓글 삭제 실패 — 권한을 확인하세요'));
+        } catch (err) {}
+      });
+      acts.appendChild(db);
+    }
+    if (acts.children.length) it.appendChild(acts);
+    wrap.appendChild(it);
+  });
+  if (!ids.length) {
+    const empty = document.createElement('div'); empty.className = 'cmt-empty'; empty.textContent = '아직 댓글이 없습니다';
+    wrap.appendChild(empty);
+  }
+  cmtPanel.appendChild(wrap);
+  const form = document.createElement('div'); form.className = 'cmt-form';
+  const ta = document.createElement('textarea'); ta.className = 'cmt-input'; ta.placeholder = '댓글 작성… (⌘↵ 등록)'; ta.rows = 2;
+  ta.value = draft;
+  const send = document.createElement('button'); send.className = 'cmt-send'; send.textContent = '등록';
+  send.addEventListener('click', () => submitCmt(ta));
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeCmtPanel(); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { submitCmt(ta); }
+    e.stopPropagation();
+  });
+  form.append(ta, send);
+  cmtPanel.appendChild(form);
+  if (hadFocus) { const nt = cmtPanel.querySelector('.cmt-input'); if (nt) { nt.focus(); nt.selectionStart = nt.value.length; } }
+}
+function submitCmt(ta) {
+  const text = ta.value.trim();
+  if (!text || !cmtOpen) return;
+  const name = commenterName();
+  if (!name) return;
+  const c = { text, name, ts: Date.now() };
+  if (cloudRole === 'editor' && myUid) c.uid = myUid;
+  else c.vid = myVid();
+  try {
+    boardRef('comments/' + cmtOpen + '/c' + uid()).set(c)
+      .then(() => { ta.value = ''; })
+      .catch(() => toast('댓글 저장 실패 — Firebase 규칙에서 comments 쓰기 허용이 필요합니다'));
+  } catch (err) {}
+}
+document.addEventListener('click', e => {
+  if (cmtOpen && !(e.target.closest && (e.target.closest('#cmt-panel') || e.target.closest('#cmt-btn') || e.target.closest('.cmt-chip')))) closeCmtPanel();
+});
+editorScroll.addEventListener('scroll', hideCmtBtn);
 
 /* ---------- 저장 / 불러오기 ---------- */
 function serialize() {
@@ -2222,17 +2438,20 @@ document.addEventListener('paste', async e => {
 
 /* --- 행 도구 --- */
 pagesEl.addEventListener('mouseover', e => {
+  const ctr = e.target.closest ? e.target.closest('tr.cut') : null;
+  if (ctr) showCmtBtn(ctr); /* 댓글 버튼은 뷰어에게도 표시 */
   if (isViewer()) return;
   const hc = e.target.closest ? e.target.closest('td.hcell') : null;
   if (hc) { showColtools(hc); return; }
   if (!(e.target.closest && e.target.closest('#coltools'))) hideColtools();
-  const tr = e.target.closest ? e.target.closest('tr.cut') : null;
-  if (tr) showRowtools(tr);
+  if (ctr) showRowtools(ctr);
 });
 editorScroll.addEventListener('scroll', hideRowtools);
 editorScroll.addEventListener('scroll', hideColtools);
 editorScroll.addEventListener('mouseleave', e => {
-  if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#rowtools')) return;
+  const rt = e.relatedTarget && e.relatedTarget.closest;
+  if (!(rt && e.relatedTarget.closest('#cmt-btn, #cmt-panel'))) hideCmtBtn();
+  if (rt && e.relatedTarget.closest('#rowtools')) return;
   hideRowtools();
 });
 rowtools.addEventListener('mouseleave', e => {
@@ -2518,7 +2737,8 @@ $('#b-side').addEventListener('click', () => document.body.classList.toggle('sid
 
 /* --- 단축키 / 종료 경고 --- */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { selectVideoCell(null); clearMfig(); closeMenus(); hideRowtools(); return; }
+  if (e.key === 'Escape') { closeCmtPanel(); hideCmtBtn(); selectVideoCell(null); clearMfig(); closeMenus(); hideRowtools(); hideColtools(); return; }
+  if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return; /* 폼 입력 중엔 문서 단축키 무시 */
   if (isViewer()) return;
   /* 합쳐진 행의 선택된 이미지 삭제 */
   if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -3260,6 +3480,7 @@ async function cloudInit() {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
     fb = { app, auth: firebase.auth(), db: firebase.database() };
   } catch (e) { bootDone(); toast('Firebase 설정 오류'); return; }
+  try { subscribeComments(); } catch (e) {}
   $('#b-login').style.display = '';
   fb.auth.onAuthStateChanged(user => {
     if (user) enterEditorMode();
@@ -3318,6 +3539,13 @@ window.__sb = {
     stripDoc, restoreDoc,
     get role() { return cloudRole; },
     setRole(r) { cloudRole = r; document.body.classList.toggle('viewer', r === 'viewer'); renderAll(false); }
+  },
+  cmt: {
+    get comments() { return comments; },
+    set comments(v) { comments = v; refreshCommentChips(); if (cmtOpen) renderCmtPanel(); },
+    open: openCmtPanel, close: closeCmtPanel, canEdit: canEditCmt, canDel: canDelCmt,
+    refresh: refreshCommentChips, vid: myVid,
+    enableForTest() { fb = fb || { db: { ref() { return { set: () => Promise.resolve(), update: () => Promise.resolve(), remove: () => Promise.resolve(), on() {}, off() {} }; } } }; }
   },
   edit: {
     undo: undoEdit, redo: redoEdit, snapshot: snapshotCellEdit,
