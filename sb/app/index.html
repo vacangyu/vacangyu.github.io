@@ -118,6 +118,7 @@ body.following #follow-pill{display:block}
 .cast-color{width:26px;height:22px;border:none;padding:0;background:none;cursor:pointer}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
+.dim-rest{color:#a1a1aa} /* C#·Next 열 2행 이후 흐림 */
 .ratio-item{display:flex;align-items:center;gap:6px}
 .ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
 /* 행/열 드래그 이동 표시 */
@@ -454,7 +455,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 02:19";
+const BUILD_ID = "2026-08-19 02:25";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -486,11 +487,11 @@ const PXMM = ruler.getBoundingClientRect().width / 100;
 function newCut(s, c) { return { id: uid(), s: s ? esc(s) : '', c: c ? esc(c) : '', imgs: [], context: '', notes: '' }; }
 function defaultCols() {
   return [
-    { id: 's', label: 'S#', kind: 'text' },
-    { id: 'c', label: 'C#', kind: 'text' },
-    { id: 'v', label: 'Video', kind: 'video' },
-    { id: 'context', label: 'Context', kind: 'text' },
-    { id: 'notes', label: 'Notes', kind: 'text' }
+    { id: 's', label: 'S#', kind: 'text', core: true },
+    { id: 'c', label: 'C#', kind: 'text', core: true },
+    { id: 'v', label: 'Video', kind: 'video', core: true },
+    { id: 'context', label: 'Context', kind: 'text', core: true },
+    { id: 'notes', label: 'Notes', kind: 'text', core: true }
   ];
 }
 function defaultSettings() {
@@ -945,6 +946,7 @@ function renderAll(keepCaret = true) {
   const cap = keepCaret ? captureCaret() : null;
   const st = editorScroll.scrollTop, sl = editorScroll.scrollLeft;
   applyAutoHl();
+  applyDimLines();
   buildPagesDOM();
   editorScroll.scrollTop = st; editorScroll.scrollLeft = sl;
   if (cap) restoreCaret(cap);
@@ -1289,6 +1291,55 @@ function boldPrefix(span, n) {
   });
 }
 /* 토글이 켜져 있으면 렌더링마다 현재 이름 목록으로 재계산 */
+/* C#·Next 열: 첫 번째 줄 이외의 텍스트를 약간 흐리게 (모델 변환 — 인쇄에도 반영, 멱등) */
+function transformDim(html) {
+  if (!html) return html;
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  const unwrapEl = el => { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); };
+  d.querySelectorAll('span.dim-rest').forEach(unwrapEl);
+  d.querySelectorAll('.dim-rest').forEach(el => {
+    el.classList.remove('dim-rest');
+    if (!el.getAttribute('class')) el.removeAttribute('class');
+  });
+  d.normalize();
+  let line = 0, contentSeen = false;
+  [...d.childNodes].forEach(n => {
+    const isBlk = n.nodeType === 1 && /^(DIV|P)$/i.test(n.tagName);
+    const isBr = n.nodeType === 1 && n.tagName === 'BR';
+    if (isBlk) {
+      if (contentSeen || line > 0) line++;
+      if (line > 0) n.classList.add('dim-rest');
+      contentSeen = true;
+      return;
+    }
+    if (isBr) { line++; contentSeen = true; return; }
+    if (line > 0 && !(n.nodeType === 3 && !(n.textContent || '').length)) {
+      const span = document.createElement('span');
+      span.className = 'dim-rest';
+      d.insertBefore(span, n);
+      span.appendChild(n);
+    }
+    if ((n.textContent || '').trim()) contentSeen = true;
+  });
+  return d.innerHTML;
+}
+function applyDimLines() {
+  const ids = docCols()
+    .filter(col => col.kind === 'text' && (col.id === 'c' || /^next$/i.test((col.label || '').trim())))
+    .map(col => col.id);
+  if (!ids.length) return;
+  for (const b of doc.blocks) {
+    if (b.type !== 'board') continue;
+    b.cuts.forEach(cut => {
+      if (cut.merged) return;
+      ids.forEach(f => {
+        const t = transformDim(cut[f]);
+        if (t !== cut[f]) cut[f] = t;
+      });
+    });
+  }
+}
 function applyAutoHl() {
   const pairs = castPairs();
   transformAutoHl.pairs = pairs;
@@ -1603,8 +1654,8 @@ function showColtools(td) {
   const cols = docCols();
   coltools.dataset.ix = ix;
   const del = coltools.querySelector('[data-act="del"]');
-  del.disabled = cols[ix].kind === 'video';
-  del.title = cols[ix].kind === 'video' ? 'Video 열은 삭제할 수 없습니다' : '열 삭제';
+  del.disabled = !!cols[ix].core;
+  del.title = cols[ix].core ? '기본 열은 삭제할 수 없습니다' : '열 삭제';
   coltools.classList.remove('hidden');
   const rect = td.getBoundingClientRect();
   const h = coltools.offsetHeight || 24;
@@ -1652,7 +1703,7 @@ function colAction(act, ix) {
   const rc = snapArray(cols), rp = snapArray(pct); /* 변경 전 스냅숏 */
   if (act === 'rename') { startColRename(ix); return; }
   if (act === 'add') {
-    cols.splice(ix + 1, 0, { id: 'col_' + uid(), label: '새 열', kind: 'text' });
+    cols.splice(ix + 1, 0, { id: 'col_' + uid(), label: '새 열', kind: 'text', core: false });
     const w = 12; /* 새 열 12%, 기존 열은 비례 축소 */
     for (let i = 0; i < pct.length; i++) pct[i] = pct[i] * (100 - w) / 100;
     pct.splice(ix + 1, 0, w);
@@ -1666,7 +1717,7 @@ function colAction(act, ix) {
     return;
   }
   if (act === 'del') {
-    if (cols[ix].kind === 'video') return;
+    if (cols[ix].core || cols[ix].kind === 'video') { toast('기본 열은 삭제할 수 없습니다'); return; }
     if (cols.length <= 2) { toast('최소 두 개의 열이 필요합니다'); return; }
     if (!confirm(`"${cols[ix].label}" 열을 삭제할까요?\n이 열의 내용은 더 이상 표시되지 않습니다.`)) return;
     cols.splice(ix, 1);
@@ -1982,6 +2033,8 @@ function normalizeFilm(f) {
   }
   /* 동적 컬럼: cols가 없거나 colPct 길이가 어긋나면 정규화 */
   if (!Array.isArray(film.settings.cols) || !film.settings.cols.length) film.settings.cols = defaultCols();
+  /* 기존에 존재하던 열은 전부 기본값 열(core)로 — 삭제 불가. 이후 추가되는 열만 core:false */
+  film.settings.cols.forEach(c => { if (c && c.core === undefined) c.core = true; });
   let pct = film.settings.colPct;
   if (!Array.isArray(pct) || pct.length !== film.settings.cols.length) {
     pct = film.settings.cols.map((c, i) => (Array.isArray(pct) && typeof pct[i] === 'number') ? pct[i] : 100 / film.settings.cols.length);
