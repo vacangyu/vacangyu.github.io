@@ -1,22 +1,2 @@
-# macOS
+storyboarder-src/dist/
 .DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs / temp
-*.log
-*.tmp
-
-# sed/edit backup files (sandbox cannot delete; just don't push them)
-*.bak
-*.bak*
-
-# 옛 한글 파일명 (sandbox에서 rm 안 돼서 ignore로 제외)
-d/검색목록.html

@@ -463,7 +463,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 14:54";
+const BUILD_ID = "2026-08-19 15:17";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -3410,6 +3410,7 @@ window.addEventListener('beforeunload', e => {
 let fb = null;
 let viewerUnsub = null;
 let editorUnsub = null;
+let cloudDocArrived = false; /* 실제 클라우드 문서가 반영되었는지 (핸드오프 부트 게이트) */
 const imgCache = new Map();       /* hash → dataURL */
 const uploadedHashes = new Set();
 function boardRef(path) { return fb.db.ref('boards/' + BOARD_ID + (path ? '/' + path : '')); }
@@ -4324,6 +4325,18 @@ function backupTick() {
 }
 setInterval(backupTick, 30000);
 window.addEventListener('beforeunload', () => { try { lastMutTs = 0; backupTick(); } catch (e) {} });
+/* 무감지 갱신용 핸드오프: 역할과 무관하게 지금 화면의 문서를 저장 */
+function saveHandoff() {
+  return new Promise(res => {
+    if (!bkDb) return res(false);
+    try {
+      const tx = bkDb.transaction('snap', 'readwrite');
+      tx.objectStore('snap').put({ ts: Date.now(), film: currentFilm, rev: modelRev, json: serialize(), handoff: 1 });
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+    } catch (e) { res(false); }
+  });
+}
 function backupList() {
   return new Promise(res => {
     if (!bkDb) return res([]);
@@ -4373,7 +4386,7 @@ function enterViewerMode() {
     if (cloudRole !== 'viewer') return;
     const t = snap.val();
     if (!t) { bootDone(); return; }
-    try { applyRemote(await restoreDoc(t)); } catch (e) {}
+    try { applyRemote(await restoreDoc(t)); cloudDocArrived = true; } catch (e) {}
     bootDone();
   });
   subscribePresence();
@@ -4399,6 +4412,7 @@ async function enterEditorMode() {
     if (snap.exists()) {
       baseStr = snap.val();
       loadDocFromJSON(await restoreDoc(baseStr));
+      cloudDocArrived = true;
     } else publishNow(); /* 클라우드가 비어 있으면 현재 문서를 최초 발행 */
     setSyncStatus('saved');
   } catch (e) { setSyncStatus('error'); }
@@ -4542,6 +4556,22 @@ renderAll(false);
 cloudInit();
 /* 로컬 모드: 내장 문서 로드(스크립트 끝의 임베드 블록) 이후 /sb/N 라우팅 적용 */
 if (!FIREBASE_CONFIG) setTimeout(() => { if (!bootDone.applied) { bootDone.applied = true; applyUrlFilm(); } }, 0);
+/* 무감지 갱신 부트: 직전 세션이 핸드오프한 문서를 즉시 그려 스피너 없이 이어 보기.
+   클라우드 문서가 도착하면 평소처럼 조용히 교체된다(스크롤·작품 유지). */
+if (FIREBASE_CONFIG && URL_PARAMS.get('su') === '1') {
+  (async () => {
+    for (let i = 0; i < 20 && !bkDb; i++) await new Promise(r => setTimeout(r, 50));
+    if (cloudDocArrived) return; /* 클라우드가 먼저 도착 — 핸드오프 불필요 */
+    try {
+      const snaps = await backupList();
+      const s0 = snaps[0];
+      if (s0 && Date.now() - s0.ts < 180000 && !cloudDocArrived) {
+        loadDocFromJSON(s0.json);
+        bootDone();
+      }
+    } catch (e) {}
+  })();
+}
 /* 현재 보고 있는 빌드 확인용 — 로드 시 우상단에 빌드 번호 토스트 */
 if (BUILD_ID) {
   const bt = document.createElement('div');
@@ -4557,23 +4587,24 @@ if (BUILD_ID) {
   let updNotified = '';
   async function checkForUpdate() {
     try {
-      const appUrl = IN_SB ? '/sb/app/' : location.pathname;
-      const res = await fetch(appUrl, { cache: 'no-store' });
+      if (!IN_SB) return;
+      /* 경제성: 4MB 앱 대신 수십 바이트 version.txt만 폴링 (?t=로 CDN 캐시 우회) */
+      const res = await fetch('/sb/version.txt?t=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) return;
-      const head = (await res.text()).slice(0, 400000);
-      const m = /const BUILD_ID = "([^"]+)"/.exec(head);
-      if (!m || m[1] === BUILD_ID) return;
-      const guard = 'sb_reloaded_' + m[1];
+      const latest = (await res.text()).trim();
+      if (!latest || latest.length > 40 || latest === BUILD_ID) return;
+      const guard = 'sb_reloaded_' + latest;
       if (sessionStorage.getItem(guard)) return; /* 무한 새로고침 방지 */
-      if (dirty || composing) {
+      if (dirty || composing || isInteracting()) {
         pendingUpdateReload = true; /* 저장 성공 직후 publishNow가 즉시 재시도 */
-        if (updNotified !== m[1]) { updNotified = m[1]; toast('새 버전(' + m[1] + ')이 배포되었습니다 — 저장되면 자동 새로고침됩니다'); }
-        return; /* 가드는 세우지 않음 — 저장 후 다음 체크에서 새로고침 */
+        if (updNotified !== latest) { updNotified = latest; toast('새 버전(' + latest + ')이 배포되었습니다 — 저장되면 자동 갱신됩니다'); }
+        return; /* 가드는 세우지 않음 — 저장 후 다음 체크에서 갱신 */
       }
       sessionStorage.setItem(guard, '1');
+      /* 무감지 갱신: 현재 문서를 로컬에 핸드오프 저장 → 재로드 시 로딩 화면 없이 그대로 표시 */
+      try { await saveHandoff(); } catch (e) {}
       const idx = Object.keys(films).indexOf(currentFilm) + 1;
-      location.replace(IN_SB ? '/sb/app/?f=' + idx + '&v=' + Date.now()
-                             : location.pathname + '?v=' + Date.now());
+      location.replace('/sb/app/?f=' + idx + '&v=' + Date.now() + '&su=1');
     } catch (e) {}
   }
   checkUpdateFn = checkForUpdate;
@@ -4630,7 +4661,7 @@ window.__sb = {
     setMyUid(u) { myUid = u; myName = myName || '테스터'; },
     queue: collabQueue
   },
-  backup: { tick: backupTick, list: backupList },
+  backup: { tick: backupTick, list: backupList, saveHandoff },
   follow: {
     setFollow, jump: jumpToUser,
     applyPresence(id, v) { presences[id] = v; refreshPresenceUI(); },
