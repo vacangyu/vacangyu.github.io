@@ -5,6 +5,7 @@
 <title>스토리보드 메이커</title>
 <style>
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%} /* 모바일 폰트 부스팅 차단 — 축소 시 글씨도 비례 축소(인쇄본처럼) */
 html,body{height:100%;margin:0}
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
@@ -3490,6 +3491,8 @@ let presencePending = null;
 let followUid = null;      /* 따라가는 중인 편집자 uid (null = 해제) */
 let followRaf = null;
 let mouseClient = null;    /* 내 마우스의 최근 client 좌표 */
+let lastMouseMoveTs = 0;   /* 내 마우스가 마지막으로 움직인 시각 */
+let followHideTs = 0;      /* 팔로우 시작·발표자 주도 스크롤 시각 — 이후 커서 숨김 */
 let myUid = null;          /* 로그인한 내 편집자 uid */
 let myName = '';
 let presences = {};        /* uid → {name, ty, cy, z, film, ts, m, car} */
@@ -3623,7 +3626,10 @@ function sendPresence() {
   const ty = editorScroll.scrollTop / z;
   const cy = (editorScroll.scrollTop + editorScroll.clientHeight / 2) / z;
   let m = null;
-  if (mouseClient && !followUid) { /* 누군가를 따라가는 중엔 내 커서를 상대에게 보내지 않음 */
+  /* 팔로우 중엔 기본 숨김. 단 내가 마우스를 움직였다면 다시 표시하되,
+     발표자가 스크롤/줌으로 화면을 움직이면(followHideTs 갱신) 다시 숨긴다 */
+  const showMouse = !followUid || lastMouseMoveTs > followHideTs;
+  if (mouseClient && showMouse) {
     const pr = pagesEl.getBoundingClientRect();
     m = { x: Math.round((mouseClient.x - pr.left) / z), y: Math.round((mouseClient.y - pr.top) / z) };
   }
@@ -3669,6 +3675,7 @@ function publishPresence() {
 editorScroll.addEventListener('mousemove', e => {
   if (cloudRole !== 'editor') return;
   mouseClient = { x: e.clientX, y: e.clientY };
+  lastMouseMoveTs = Date.now();
   positionCursorChat();
   publishPresence();
 });
@@ -3768,6 +3775,7 @@ document.addEventListener('selectionchange', () => publishPresence());
 document.addEventListener('compositionend', () => publishPresence());
 function setFollow(uidTo) {
   followUid = uidTo;
+  followHideTs = Date.now(); /* 팔로우 시작 시 기본적으로 내 커서 숨김 */
   document.body.classList.toggle('following', !!uidTo);
   if (uidTo) {
     const p = presences[uidTo];
@@ -3826,6 +3834,7 @@ function followTick() {
   const target = Math.max(0, Math.min(max, followWantTop(p)));
   const d = target - editorScroll.scrollTop;
   if (Math.abs(d) > 0.6) editorScroll.scrollTop = editorScroll.scrollTop + d * 0.16; /* 부드러운 감쇠 이동 */
+  if (Math.abs(d) > 3) followHideTs = Date.now(); /* 발표자 주도 이동 → 내 커서 다시 숨김 */
 }
 function jumpToUser(id) {
   const p = presences[id];
