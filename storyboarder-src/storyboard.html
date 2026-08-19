@@ -128,7 +128,7 @@ body.mobileview #spot-pill{top:8px}
 .crew-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1}
 .crew-chip{border:1.5px solid transparent;border-radius:999px;height:26px;padding:0 11px;font-size:12px;font-weight:600;color:#18181b;cursor:pointer;font-family:inherit}
 .crew-chip.on{border-color:#18181b;box-shadow:0 0 0 2px rgba(24,24,27,.15)}
-.crew-chip.cx{background:repeating-linear-gradient(45deg,#fca5a5 0 4px,#fff 4px 8px)}
+.crew-chip.cx{background:linear-gradient(to bottom left,transparent calc(50% - 1px),#dc2626 calc(50% - 1px),#dc2626 calc(50% + 1px),transparent calc(50% + 1px)) #fff}
 .crew-chip.ro{cursor:default}
 .crew-acts{display:flex;gap:6px}
 .crew-scroll{flex:1;overflow:auto}
@@ -154,7 +154,8 @@ th.crew-left{background:#fafafa}
 .crew-teamcolor{width:22px;height:18px;border:none;padding:0;background:none;cursor:pointer;vertical-align:middle}
 .crew-teamfill{border-left:none}
 .crew-cell{width:26px;min-width:26px;height:24px;cursor:crosshair}
-.crew-cell.cx{background:repeating-linear-gradient(45deg,#f87171 0 4px,#fff 4px 8px) !important}
+.crew-cell.crew-selq{box-shadow:inset 0 0 0 2px #2563eb;background-image:linear-gradient(rgba(37,99,235,.14),rgba(37,99,235,.14))}
+.crew-cell.cx{background:linear-gradient(to bottom left,transparent calc(50% - 0.75px),#dc2626 calc(50% - 0.75px),#dc2626 calc(50% + 0.75px),transparent calc(50% + 0.75px)) #fff !important}
 body.viewer .crew-cell{cursor:default}
 .crew-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:1px 4px;font-family:inherit}
 .crew-x:hover{color:#18181b}
@@ -4267,6 +4268,10 @@ function renderCrewPanel() {
   const c = crewData();
   if (!c) { closeCrewPanel(); return; }
   const edit = crewCanEdit();
+  /* 재구축 전 스크롤 위치 보존 — 도구 선택·원격 갱신 때 표가 처음으로 튀지 않도록 */
+  const prevScroll = crewPanel.querySelector('.crew-scroll');
+  const keepX = prevScroll ? prevScroll.scrollLeft : 0;
+  const keepY = prevScroll ? prevScroll.scrollTop : 0;
   crewPanel.innerHTML = '';
   /* 헤더: 제목 + 도구 팔레트 + 관리 버튼 */
   const head = document.createElement('div');
@@ -4406,6 +4411,7 @@ function renderCrewPanel() {
   });
   table.appendChild(tr2);
   /* 팀별 인원 행 */
+  let crewRowIdx = 0;
   (c.teams || []).forEach(team => {
     const trT = document.createElement('tr');
     trT.className = 'crew-teamrow';
@@ -4494,6 +4500,7 @@ function renderCrewPanel() {
       tdR.textContent = mem.role || '';
       if (edit) tdR.addEventListener('dblclick', () => crewInlineEdit(tdR, () => mem.role || '', v => { mem.role = v; }));
       tr.appendChild(tdR);
+      let ci = 0;
       days.forEach(d => {
         for (let h = d.h0; h <= d.h1; h++) {
           const td = document.createElement('td');
@@ -4501,15 +4508,20 @@ function renderCrewPanel() {
           td.dataset.m = mem.id;
           td.dataset.d = d.id;
           td.dataset.h = h;
+          td.dataset.ri = crewRowIdx;
+          td.dataset.ci = ci++;
           crewApplyCellStyle(td, crewMarkOf(mem.id, d.id, h));
           tr.appendChild(td);
         }
       });
+      crewRowIdx++;
       table.appendChild(tr);
     });
   });
   wrap.appendChild(table);
   crewPanel.appendChild(wrap);
+  wrap.scrollLeft = keepX;
+  wrap.scrollTop = keepY;
   if (edit) {
     const hint = document.createElement('div');
     hint.className = 'crew-hint';
@@ -4517,20 +4529,60 @@ function renderCrewPanel() {
     crewPanel.appendChild(hint);
   }
 }
-/* 셀 칠하기 (클릭 + 드래그) */
+/* 셀 칠하기: 드래그로 직사각형 범위를 먼저 표시하고, 놓는 순간 범위 전체를 일괄 적용 */
+let crewSel = null; /* {r0, c0, r1, c1} */
+function crewSelCells() {
+  if (!crewSel) return [];
+  const rA = Math.min(crewSel.r0, crewSel.r1), rB = Math.max(crewSel.r0, crewSel.r1);
+  const cA = Math.min(crewSel.c0, crewSel.c1), cB = Math.max(crewSel.c0, crewSel.c1);
+  return [...crewPanel.querySelectorAll('td.crew-cell')].filter(td => {
+    const ri = +td.dataset.ri, ci = +td.dataset.ci;
+    return ri >= rA && ri <= rB && ci >= cA && ci <= cB;
+  });
+}
+function crewSelHighlight() {
+  crewPanel.querySelectorAll('td.crew-selq').forEach(td => td.classList.remove('crew-selq'));
+  crewSelCells().forEach(td => td.classList.add('crew-selq'));
+}
 crewPanel.addEventListener('pointerdown', e => {
   const td = e.target.closest ? e.target.closest('td.crew-cell') : null;
   if (!td || !crewCanEdit()) return;
   e.preventDefault();
-  crewPainting = true;
-  crewPaintCell(td);
+  crewSel = { r0: +td.dataset.ri, c0: +td.dataset.ci, r1: +td.dataset.ri, c1: +td.dataset.ci };
+  crewSelHighlight();
 });
 crewPanel.addEventListener('pointerover', e => {
-  if (!crewPainting) return;
+  if (!crewSel) return;
   const td = e.target.closest ? e.target.closest('td.crew-cell') : null;
-  if (td) crewPaintCell(td);
+  if (!td) return;
+  crewSel.r1 = +td.dataset.ri;
+  crewSel.c1 = +td.dataset.ci;
+  crewSelHighlight();
 });
-window.addEventListener('pointerup', () => { crewPainting = false; });
+window.addEventListener('pointerup', () => {
+  if (!crewSel) return;
+  const cells = crewSelCells();
+  crewSel = null;
+  crewPanel.querySelectorAll('td.crew-selq').forEach(td => td.classList.remove('crew-selq'));
+  if (!cells.length || !crewCanEdit()) return;
+  const c = crewData();
+  if (!c) return;
+  const before = JSON.stringify(c.marks || {});
+  const want = crewTool == null ? null : crewTool;
+  let changed = false;
+  cells.forEach(td => {
+    const cur = crewMarkOf(td.dataset.m, td.dataset.d, td.dataset.h);
+    if ((cur == null && want == null) || cur === want) return;
+    crewSetMark(td.dataset.m, td.dataset.d, +td.dataset.h, want);
+    crewApplyCellStyle(td, want);
+    changed = true;
+  });
+  if (!changed) return;
+  const filmDoc = doc;
+  pushOp(() => { if (filmDoc.crew) filmDoc.crew.marks = JSON.parse(before); });
+  markDirty();
+  publishFast();
+});
 /* 인원 드래그: 다른 팀/행 위에 놓아 이동·재배치 */
 let crewDragMem = null;
 crewPanel.addEventListener('dragover', e => {
