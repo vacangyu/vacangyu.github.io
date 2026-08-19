@@ -137,10 +137,10 @@ body.mobileview #spot-pill{top:8px}
 .crew-table{border-collapse:separate;border-spacing:0;font-size:12px}
 .crew-table th,.crew-table td{border-right:1px solid #f1f1f4;border-bottom:1px solid #f1f1f4;white-space:nowrap}
 .crew-hd1 th,.crew-hd2 th{position:sticky;background:#fff;z-index:3}
-.crew-hd1 th{top:0;border-bottom:none}
-.crew-hd2 th{top:34px;border-bottom:1.5px solid #d4d4d8}
+.crew-hd1 th{top:0;border-bottom:none;height:34px;box-sizing:border-box}
+.crew-hd2 th{top:34px;height:26px;box-sizing:border-box;border-bottom:1.5px solid #d4d4d8}
 .crew-corner{background:#fff}
-.crew-day{padding:6px 10px 2px 14px;text-align:left;height:26px}
+.crew-day{padding:0 10px 0 14px;text-align:left;vertical-align:middle}
 .crew-day-label{font-weight:800;margin-right:7px;font-size:13px}
 .crew-day-sub{color:#a1a1aa;font-weight:500}
 .crew-day-rng{margin-left:10px;color:#a1a1aa;font-weight:400}
@@ -156,7 +156,9 @@ th.crew-left{background:#fff;color:#a1a1aa;font-weight:600;font-size:11px}
 .crew-teamcell{left:0;font-weight:800;z-index:2;background:#fafafa !important}
 .crew-team-dot{display:inline-block;vertical-align:-1px;margin-right:7px;width:10px;height:10px}
 .crew-team-name{margin-right:7px;letter-spacing:-.01em}
-.crew-teamcolor{width:20px;height:16px;border:none;padding:0;background:none;cursor:pointer;vertical-align:middle;opacity:.85}
+.crew-teamcolor-hidden{position:absolute;width:0;height:0;opacity:0;border:none;padding:0;pointer-events:none}
+.crew-team-dot.clickable{cursor:pointer;box-shadow:0 0 0 1.5px rgba(0,0,0,.08)}
+.crew-team-dot.clickable:hover{box-shadow:0 0 0 2px rgba(0,0,0,.25)}
 .crew-teamfill{border-left:none}
 .crew-cell{width:26px;min-width:26px;height:24px;cursor:crosshair}
 .crew-cell.crew-selq{box-shadow:inset 0 0 0 2px #2563eb;background-image:linear-gradient(rgba(37,99,235,.12),rgba(37,99,235,.12))}
@@ -514,7 +516,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 16:45";
+const BUILD_ID = "2026-08-19 17:07";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -4184,6 +4186,19 @@ function crewSeedFor(filmName) {
   };
 }
 function crewData() { return doc.crew || null; }
+/* 커밋 시점에 항상 '살아있는' 객체를 id로 조회 — 원격 병합이 crew 트리를 교체해도
+   수정이 고아 객체에 쓰이는 일이 없도록 (수정이 이전 값으로 되돌아 보이던 버그의 원인) */
+function crewTeamById(id) { const c = crewData(); return c ? (c.teams || []).find(t => t.id === id) : null; }
+function crewMemById(id) {
+  const c = crewData();
+  if (!c) return null;
+  for (const t of c.teams || []) {
+    const m = (t.members || []).find(x => x.id === id);
+    if (m) return { team: t, mem: m };
+  }
+  return null;
+}
+function crewDayById(id) { const c = crewData(); return c ? (c.days || []).find(d => d.id === id) : null; }
 let crewTool = null;      /* 현재 도구: 팀 id | 'X' | null(지우개) */
 let crewPainting = false;
 const crewPanel = document.createElement('div');
@@ -4344,8 +4359,9 @@ function renderCrewPanel() {
     addDay.textContent = '＋ 날짜';
     addDay.addEventListener('click', () => {
       crewMutate(() => {
-        const last = (c.days || [])[c.days.length - 1];
-        c.days.push({ id: 'cd' + uid(), label: '새 날짜', sub: '', h0: last ? last.h0 : 9, h1: last ? last.h1 : 20 });
+        const cc = crewData();
+        const last = (cc.days || [])[cc.days.length - 1];
+        cc.days.push({ id: 'cd' + uid(), label: '새 날짜', sub: '', h0: last ? last.h0 : 9, h1: last ? last.h1 : 20 });
       });
     });
     acts.appendChild(addDay);
@@ -4354,7 +4370,8 @@ function renderCrewPanel() {
     addTeam.textContent = '＋ 팀';
     addTeam.addEventListener('click', () => {
       crewMutate(() => {
-        c.teams.push({ id: 'ct' + uid(), name: '새 팀', color: CREW_COLORS[c.teams.length % CREW_COLORS.length], members: [] });
+        const cc = crewData();
+        cc.teams.push({ id: 'ct' + uid(), name: '새 팀', color: CREW_COLORS[cc.teams.length % CREW_COLORS.length], members: [] });
       });
     });
     acts.appendChild(addTeam);
@@ -4384,15 +4401,15 @@ function renderCrewPanel() {
     const sub = document.createElement('span'); sub.className = 'crew-day-sub'; sub.textContent = d.sub || '';
     th.append(lab, sub);
     if (edit) {
-      lab.addEventListener('dblclick', () => crewInlineEdit(lab, () => d.label, v => { d.label = v; }));
-      sub.addEventListener('dblclick', () => crewInlineEdit(sub, () => d.sub || '', v => { d.sub = v; }));
+      lab.addEventListener('dblclick', () => crewInlineEdit(lab, () => d.label, v => { const dd = crewDayById(d.id); if (dd) dd.label = v; }));
+      sub.addEventListener('dblclick', () => crewInlineEdit(sub, () => d.sub || '', v => { const dd = crewDayById(d.id); if (dd) dd.sub = v; }));
       const rng = document.createElement('span');
       rng.className = 'crew-day-rng';
       const i0 = Object.assign(document.createElement('input'), { type: 'number', min: 0, max: 23, value: d.h0 });
       const i1 = Object.assign(document.createElement('input'), { type: 'number', min: 0, max: 23, value: d.h1 });
       [i0, i1].forEach(inp => inp.addEventListener('change', () => {
         const a = Math.max(0, Math.min(23, +i0.value || 0)), b2 = Math.max(0, Math.min(23, +i1.value || 0));
-        crewMutate(() => { d.h0 = Math.min(a, b2); d.h1 = Math.max(a, b2); });
+        crewMutate(() => { const dd = crewDayById(d.id); if (dd) { dd.h0 = Math.min(a, b2); dd.h1 = Math.max(a, b2); } });
       }));
       const dx = document.createElement('button');
       dx.className = 'crew-x';
@@ -4401,8 +4418,9 @@ function renderCrewPanel() {
       dx.addEventListener('click', () => {
         if (!confirm('"' + d.label + '" 날짜를 삭제할까요? 해당 날짜의 배정이 모두 지워집니다.')) return;
         crewMutate(() => {
-          c.days = c.days.filter(x => x.id !== d.id);
-          Object.values(c.marks || {}).forEach(mm => delete mm[d.id]);
+          const cc = crewData();
+          cc.days = cc.days.filter(x => x.id !== d.id);
+          Object.values(cc.marks || {}).forEach(mm => delete mm[d.id]);
         });
       });
       rng.append(i0, '–', i1, dx);
@@ -4445,7 +4463,7 @@ function renderCrewPanel() {
     nm.textContent = team.name;
     tdT.appendChild(nm);
     if (edit) {
-      nm.addEventListener('dblclick', () => crewInlineEdit(nm, () => team.name, v => { team.name = v || team.name; }));
+      nm.addEventListener('dblclick', () => crewInlineEdit(nm, () => team.name, v => { const t = crewTeamById(team.id); if (t && v) t.name = v; }));
       const col = document.createElement('input');
       col.type = 'color';
       col.value = team.color;
@@ -4460,24 +4478,32 @@ function renderCrewPanel() {
         });
       };
       col.addEventListener('input', () => {
-        if (colStart == null) colStart = team.color;
-        team.color = col.value;
+        const t = crewTeamById(team.id);
+        if (!t) return;
+        if (colStart == null) colStart = t.color;
+        t.color = col.value;
         recolor(col.value);
       });
       col.addEventListener('change', () => {
+        const t = crewTeamById(team.id);
         const nv = col.value;
-        const ov = colStart != null ? colStart : team.color;
+        if (!t) return;
+        const ov = colStart != null ? colStart : t.color;
         colStart = null;
-        team.color = ov;
-        if (nv !== ov) crewMutate(() => { team.color = nv; });
+        t.color = ov;
+        if (nv !== ov) crewMutate(() => { const t2 = crewTeamById(team.id); if (t2) t2.color = nv; });
         else renderCrewPanel();
       });
+      col.className = 'crew-teamcolor-hidden';
+      sw.classList.add('clickable');
+      sw.title = '클릭해서 팀 테마색 변경';
+      sw.addEventListener('click', () => col.click());
       tdT.appendChild(col);
       const addM = document.createElement('button');
       addM.className = 'crew-x';
       addM.textContent = '＋';
       addM.title = '인원 추가';
-      addM.addEventListener('click', () => crewMutate(() => team.members.push({ id: 'cm' + uid(), name: '이름', role: '' })));
+      addM.addEventListener('click', () => crewMutate(() => { const t = crewTeamById(team.id); if (t) t.members.push({ id: 'cm' + uid(), name: '이름', role: '' }); }));
       tdT.appendChild(addM);
       const delT = document.createElement('button');
       delT.className = 'crew-x';
@@ -4486,17 +4512,27 @@ function renderCrewPanel() {
       delT.addEventListener('click', () => {
         if (!confirm('"' + team.name + '" 팀을 삭제할까요? 소속 인원과 배정이 지워집니다.')) return;
         crewMutate(() => {
-          team.members.forEach(m => delete (c.marks || {})[m.id]);
-          c.teams = c.teams.filter(x => x.id !== team.id);
+          const cc = crewData();
+          const t = crewTeamById(team.id);
+          if (t) t.members.forEach(m => delete (cc.marks || {})[m.id]);
+          cc.teams = cc.teams.filter(x => x.id !== team.id);
         });
       });
       tdT.appendChild(delT);
     }
     trT.appendChild(tdT);
-    const fill = document.createElement('td');
-    fill.colSpan = Math.max(1, days.reduce((a, d) => a + (d.h1 - d.h0 + 1), 0));
-    fill.className = 'crew-teamfill';
-    trT.appendChild(fill);
+    if (days.length) {
+      days.forEach(d => {
+        const fill = document.createElement('td');
+        fill.colSpan = Math.max(1, d.h1 - d.h0 + 1);
+        fill.className = 'crew-teamfill crew-day-start';
+        trT.appendChild(fill);
+      });
+    } else {
+      const fill = document.createElement('td');
+      fill.className = 'crew-teamfill';
+      trT.appendChild(fill);
+    }
     table.appendChild(trT);
     team.members.forEach(mem => {
       const tr = document.createElement('tr');
@@ -4523,8 +4559,10 @@ function renderCrewPanel() {
         mx.addEventListener('click', () => {
           if (!confirm(mem.name + ' 님을 삭제할까요?')) return;
           crewMutate(() => {
-            team.members = team.members.filter(x => x.id !== mem.id);
-            delete (c.marks || {})[mem.id];
+            const cc = crewData();
+            const f = crewMemById(mem.id);
+            if (f) f.team.members = f.team.members.filter(x => x.id !== mem.id);
+            delete (cc.marks || {})[mem.id];
           });
         });
         tdH.appendChild(mx);
@@ -4533,12 +4571,12 @@ function renderCrewPanel() {
       const tdN = document.createElement('td');
       tdN.className = 'crew-left crew-l1';
       tdN.textContent = mem.name;
-      if (edit) tdN.addEventListener('dblclick', () => crewInlineEdit(tdN, () => mem.name, v => { mem.name = v || mem.name; }));
+      if (edit) tdN.addEventListener('dblclick', () => crewInlineEdit(tdN, () => mem.name, v => { const f = crewMemById(mem.id); if (f && v) f.mem.name = v; }));
       tr.appendChild(tdN);
       const tdR = document.createElement('td');
       tdR.className = 'crew-left crew-l2';
       tdR.textContent = mem.role || '';
-      if (edit) tdR.addEventListener('dblclick', () => crewInlineEdit(tdR, () => mem.role || '', v => { mem.role = v; }));
+      if (edit) tdR.addEventListener('dblclick', () => crewInlineEdit(tdR, () => mem.role || '', v => { const f = crewMemById(mem.id); if (f) f.mem.role = v; }));
       tr.appendChild(tdR);
       let ci = 0;
       days.forEach(d => {
