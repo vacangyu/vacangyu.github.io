@@ -464,7 +464,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 15:47";
+const BUILD_ID = "2026-08-19 15:58";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -1254,6 +1254,7 @@ function undoHighlight() {
     /* 구조 조작(컷/블록/열 등) 되돌리기 */
     try { u.op(); } catch (e) {}
     markDirty();
+    publishFast();
     renderAll(false);
     return true;
   }
@@ -1264,6 +1265,7 @@ function undoHighlight() {
       const arr = loc.block.cuts[loc.index].imgs;
       arr.splice(Math.min(u.imgRestore.ix, arr.length), 0, u.imgRestore.im);
       markDirty();
+      publishFast();
       renderAll(false);
     }
     return true;
@@ -1275,6 +1277,7 @@ function undoHighlight() {
       const [im] = t.block.cuts[t.index].imgs.splice(u.imgMove.toIx, 1);
       if (im) f.block.cuts[f.index].imgs.splice(Math.min(u.imgMove.fromIx, f.block.cuts[f.index].imgs.length), 0, im);
       markDirty();
+      publishFast();
       renderAll(false);
     }
     return true;
@@ -1595,6 +1598,7 @@ async function addCutImages(cutId, fileList) {
     catch (e) { toast(e.message); }
   }
   markDirty();
+  publishFast(); /* 사진 추가 즉시 발행 */
   renderAll(false);
 }
 
@@ -2386,6 +2390,7 @@ function applyPhotoMode(mode) {
   applyDocVars();
   updatePageStyle();
   markDirty();
+  publishFast();
   renderAll(false);
 }
 function renderRatioPop() {
@@ -2546,7 +2551,7 @@ pagesEl.addEventListener('click', e => {
       if (hlUndoStack.length > 50) hlUndoStack.shift();
       arr.splice(ix, 1);
       state.imgSel = null; state.zoomUI = null;
-      markDirty(); renderAll(false);
+      markDirty(); publishFast(); renderAll(false);
     }
     return;
   }
@@ -2560,7 +2565,7 @@ pagesEl.addEventListener('click', e => {
         const prev = im.fit;
         im.fit = im.fit === 'cover' ? 'contain' : 'cover';
         pushOp(() => { im.fit = prev; });
-        markDirty(); renderAll(false);
+        markDirty(); publishFast(); renderAll(false);
       }
     }
     return;
@@ -2575,7 +2580,7 @@ pagesEl.addEventListener('click', e => {
         const h = fl.classList.contains('imgflh');
         if (h) im.flipH = !im.flipH; else im.flipV = !im.flipV;
         pushOp(() => { if (h) im.flipH = !im.flipH; else im.flipV = !im.flipV; });
-        markDirty(); renderAll(false);
+        markDirty(); publishFast(); renderAll(false);
       }
     }
     return;
@@ -2742,6 +2747,7 @@ pagesEl.addEventListener('drop', e => {
   if (hlUndoStack.length > 50) hlUndoStack.shift();
   state.imgSel = null; state.zoomUI = null;
   markDirty();
+  publishFast();
   renderAll(false);
 });
 pagesEl.addEventListener('dragend', () => { imgDrag = null; clearImgDropHints(); });
@@ -3368,7 +3374,7 @@ document.addEventListener('keydown', e => {
       if (hlUndoStack.length > 50) hlUndoStack.shift();
       arr.splice(state.imgSel.ix, 1);
       state.imgSel = null; state.zoomUI = null;
-      markDirty(); renderAll(false);
+      markDirty(); publishFast(); renderAll(false);
     }
     return;
   }
@@ -4343,6 +4349,13 @@ async function publishNow() {
 }
 /* 트레일링 2초 + 최대 6초 — 연속 타이핑 중에도 주기적으로 발행돼 상대에게 전파 */
 let pubT = null, pubDeadline = 0;
+/* 사진 조작 등 단발 변경은 텍스트급 즉시 반영을 위해 150ms 후 바로 발행 */
+function publishFast() {
+  if (cloudRole !== 'editor') return;
+  clearTimeout(pubT);
+  pubDeadline = Date.now() + 150;
+  pubT = setTimeout(() => { pubT = null; publishNow(); }, 150);
+}
 function schedulePublish() {
   const now = Date.now();
   if (!pubT) pubDeadline = now + 6000;
