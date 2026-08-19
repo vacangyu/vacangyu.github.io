@@ -120,48 +120,54 @@ body.mobileview #spot-pill{top:8px}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
 .dim-rest{color:#a1a1aa;font-size:calc(1em - 1pt);font-style:italic} /* C#·Next 열 첫 줄 제외: 흐림 + 1pt 축소 + 이탤릭 */
-/* 인원표 패널 */
+/* 인원표 패널 — 모던 플랫 */
 #crew-panel{position:fixed;inset:0;z-index:200;background:#fff;display:flex;flex-direction:column}
 #crew-panel.hidden{display:none}
-.crew-head{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid #e4e4e7;flex-wrap:wrap}
-.crew-title{font-size:16px;font-weight:800;letter-spacing:-.01em}
-.crew-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1}
-.crew-chip{border:1.5px solid transparent;border-radius:999px;height:26px;padding:0 11px;font-size:12px;font-weight:600;color:#18181b;cursor:pointer;font-family:inherit}
-.crew-chip.on{border-color:#18181b;box-shadow:0 0 0 2px rgba(24,24,27,.15)}
-.crew-chip.cx{background:linear-gradient(to bottom left,transparent calc(50% - 1px),#dc2626 calc(50% - 1px),#dc2626 calc(50% + 1px),transparent calc(50% + 1px)) #fff}
+.crew-head{display:flex;align-items:center;gap:16px;padding:12px 18px;border-bottom:1px solid #ececf0;flex-wrap:wrap}
+.crew-title{font-size:16px;font-weight:800;letter-spacing:-.02em}
+.crew-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1}
+.crew-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #e4e4e7;background:#fff;border-radius:999px;height:28px;padding:0 12px;font-size:12px;font-weight:600;color:#3f3f46;cursor:pointer;font-family:inherit;transition:border-color .12s ease,box-shadow .12s ease}
+.crew-chip:hover{border-color:#a1a1aa}
+.crew-chip.on{border-color:#18181b;box-shadow:0 0 0 1.5px #18181b inset;color:#18181b}
+.crew-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+.crew-chip.cx{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cline x1='100' y1='0' x2='0' y2='100' stroke='%23dc2626' stroke-width='1.1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center/16px 16px no-repeat #fff;padding-left:26px}
 .crew-chip.ro{cursor:default}
 .crew-acts{display:flex;gap:6px}
 .crew-scroll{flex:1;overflow:auto}
-.crew-table{border-collapse:collapse;font-size:12px}
-.crew-table th,.crew-table td{border:1px solid #e4e4e7;white-space:nowrap}
-.crew-hd1 th,.crew-hd2 th{position:sticky;background:#fafafa;z-index:3}
-.crew-hd1 th{top:0}
-.crew-hd2 th{top:34px}
-.crew-corner{background:#fafafa}
-.crew-day{padding:4px 8px;text-align:left;height:26px}
-.crew-day-label{font-weight:800;margin-right:6px}
-.crew-day-sub{color:#71717a;font-weight:400}
-.crew-day-rng{margin-left:8px;color:#a1a1aa;font-weight:400}
-.crew-day-rng input{width:40px;border:1px solid #e4e4e7;border-radius:5px;font-size:11px;padding:1px 3px;font-family:inherit}
-.crew-h{width:26px;min-width:26px;text-align:center;padding:2px 0;font-weight:500;color:#71717a}
-.crew-left{position:sticky;background:#fff;z-index:2;padding:3px 8px}
-th.crew-left{background:#fafafa}
+.crew-table{border-collapse:separate;border-spacing:0;font-size:12px}
+.crew-table th,.crew-table td{border-right:1px solid #f1f1f4;border-bottom:1px solid #f1f1f4;white-space:nowrap}
+.crew-hd1 th,.crew-hd2 th{position:sticky;background:#fff;z-index:3}
+.crew-hd1 th{top:0;border-bottom:none}
+.crew-hd2 th{top:34px;border-bottom:1.5px solid #d4d4d8}
+.crew-corner{background:#fff}
+.crew-day{padding:6px 10px 2px 14px;text-align:left;height:26px}
+.crew-day-label{font-weight:800;margin-right:7px;font-size:13px}
+.crew-day-sub{color:#a1a1aa;font-weight:500}
+.crew-day-rng{margin-left:10px;color:#a1a1aa;font-weight:400}
+.crew-day-rng input{width:40px;border:1px solid #e4e4e7;border-radius:6px;font-size:11px;padding:2px 4px;font-family:inherit;color:#71717a}
+.crew-h{width:26px;min-width:26px;text-align:center;padding:3px 0;font-weight:500;color:#a1a1aa;font-size:10.5px}
+.crew-day-start{border-left:2px solid #d4d4d8 !important} /* 날짜 그룹 구분 */
+.crew-left{position:sticky;background:#fff;z-index:2;padding:4px 9px}
+th.crew-left{background:#fff;color:#a1a1aa;font-weight:600;font-size:11px}
 .crew-l0{left:0;min-width:44px}
-.crew-l1{left:44px;min-width:72px;font-weight:600}
-.crew-l2{left:116px;min-width:64px;color:#71717a;font-size:11px}
-.crew-teamcell{left:0;font-weight:800;z-index:2}
-.crew-team-name{margin-right:6px}
-.crew-teamcolor{width:22px;height:18px;border:none;padding:0;background:none;cursor:pointer;vertical-align:middle}
+.crew-l1{left:44px;min-width:72px;font-weight:600;color:#26262b}
+.crew-l2{left:116px;min-width:64px;color:#a1a1aa;font-size:11px}
+.crew-teamrow td{background:#fafafa;border-bottom:1px solid #ececf0}
+.crew-teamcell{left:0;font-weight:800;z-index:2;background:#fafafa !important}
+.crew-team-dot{display:inline-block;vertical-align:-1px;margin-right:7px;width:10px;height:10px}
+.crew-team-name{margin-right:7px;letter-spacing:-.01em}
+.crew-teamcolor{width:20px;height:16px;border:none;padding:0;background:none;cursor:pointer;vertical-align:middle;opacity:.85}
 .crew-teamfill{border-left:none}
 .crew-cell{width:26px;min-width:26px;height:24px;cursor:crosshair}
-.crew-cell.crew-selq{box-shadow:inset 0 0 0 2px #2563eb;background-image:linear-gradient(rgba(37,99,235,.14),rgba(37,99,235,.14))}
-.crew-cell.cx{background:linear-gradient(to bottom left,transparent calc(50% - 0.75px),#dc2626 calc(50% - 0.75px),#dc2626 calc(50% + 0.75px),transparent calc(50% + 0.75px)) #fff !important}
+.crew-cell.crew-selq{box-shadow:inset 0 0 0 2px #2563eb;background-image:linear-gradient(rgba(37,99,235,.12),rgba(37,99,235,.12))}
+.crew-cell.cx{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cline x1='100' y1='0' x2='0' y2='100' stroke='%23dc2626' stroke-width='1.1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center/100% 100% no-repeat #fff !important}
 body.viewer .crew-cell{cursor:default}
-.crew-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:1px 4px;font-family:inherit}
+.crew-x{border:none;background:none;color:#c4c4ca;cursor:pointer;font-size:11px;padding:1px 4px;font-family:inherit;transition:color .12s ease}
 .crew-x:hover{color:#18181b}
-.crew-handle{cursor:grab;color:#a1a1aa;margin-right:3px;user-select:none}
+.crew-handle{cursor:grab;color:#c4c4ca;margin-right:3px;user-select:none}
+.crew-handle:hover{color:#71717a}
 .crew-drop td{box-shadow:inset 0 -2.5px 0 #2563eb}
-.crew-hint{padding:7px 16px;font-size:11.5px;color:#a1a1aa;border-top:1px solid #f4f4f5}
+.crew-hint{padding:8px 18px;font-size:11.5px;color:#c4c4ca;border-top:1px solid #f6f6f8}
 body.mobileview #crew-panel,body.mobileview #b-crew-table{display:none !important}
 /* 모바일 뷰어 — 크롬 없이 실시간 PDF처럼 전체 페이지 보기 */
 body.mobileview #topbar,body.mobileview #sidebar,body.mobileview #rowtools,body.mobileview #coltools,
@@ -4286,8 +4292,10 @@ function renderCrewPanel() {
     (c.teams || []).forEach((t, i) => {
       const chip = document.createElement('button');
       chip.className = 'crew-chip' + (crewTool === t.id ? ' on' : '');
-      chip.style.background = t.color;
-      chip.textContent = (i < 8 ? (i + 1) + ' ' : '') + t.name;
+      const dot = document.createElement('span');
+      dot.className = 'crew-dot';
+      dot.style.background = t.color;
+      chip.append(dot, (i < 8 ? (i + 1) + ' ' : '') + t.name);
       chip.title = '이 팀 색으로 칠하기' + (i < 8 ? ' (단축키 ' + (i + 1) + ')' : '');
       chip.addEventListener('click', () => { crewTool = t.id; renderCrewPanel(); });
       tools.appendChild(chip);
@@ -4308,8 +4316,10 @@ function renderCrewPanel() {
     (c.teams || []).forEach(t => {
       const chip = document.createElement('span');
       chip.className = 'crew-chip ro';
-      chip.style.background = t.color;
-      chip.textContent = t.name;
+      const dot = document.createElement('span');
+      dot.className = 'crew-dot';
+      dot.style.background = t.color;
+      chip.append(dot, t.name);
       tools.appendChild(chip);
     });
     const xchip = document.createElement('span');
@@ -4361,7 +4371,7 @@ function renderCrewPanel() {
   days.forEach(d => {
     const th = document.createElement('th');
     th.colSpan = Math.max(1, d.h1 - d.h0 + 1);
-    th.className = 'crew-day';
+    th.className = 'crew-day crew-day-start';
     const lab = document.createElement('span'); lab.className = 'crew-day-label'; lab.textContent = d.label;
     const sub = document.createElement('span'); sub.className = 'crew-day-sub'; sub.textContent = d.sub || '';
     th.append(lab, sub);
@@ -4404,7 +4414,7 @@ function renderCrewPanel() {
   days.forEach(d => {
     for (let h = d.h0; h <= d.h1; h++) {
       const th = document.createElement('th');
-      th.className = 'crew-h';
+      th.className = 'crew-h' + (h === d.h0 ? ' crew-day-start' : '');
       th.textContent = String(h).padStart(2, '0');
       tr2.appendChild(th);
     }
@@ -4418,7 +4428,10 @@ function renderCrewPanel() {
     const tdT = document.createElement('td');
     tdT.colSpan = 3;
     tdT.className = 'crew-left crew-teamcell';
-    tdT.style.background = team.color;
+    const sw = document.createElement('span');
+    sw.className = 'crew-dot crew-team-dot';
+    sw.style.background = team.color;
+    tdT.appendChild(sw);
     const nm = document.createElement('span');
     nm.className = 'crew-team-name';
     nm.textContent = team.name;
@@ -4430,7 +4443,27 @@ function renderCrewPanel() {
       col.value = team.color;
       col.className = 'crew-teamcolor';
       col.title = '팀 테마색';
-      col.addEventListener('change', () => crewMutate(() => { team.color = col.value; }));
+      /* 픽커에서 고르는 즉시 라이브 반영, 닫으면 한 번에 커밋(undo 1회) */
+      let colStart = null;
+      const recolor = v => {
+        sw.style.background = v;
+        crewPanel.querySelectorAll('td.crew-cell').forEach(td => {
+          if (crewMarkOf(td.dataset.m, td.dataset.d, td.dataset.h) === team.id) td.style.background = v;
+        });
+      };
+      col.addEventListener('input', () => {
+        if (colStart == null) colStart = team.color;
+        team.color = col.value;
+        recolor(col.value);
+      });
+      col.addEventListener('change', () => {
+        const nv = col.value;
+        const ov = colStart != null ? colStart : team.color;
+        colStart = null;
+        team.color = ov;
+        if (nv !== ov) crewMutate(() => { team.color = nv; });
+        else renderCrewPanel();
+      });
       tdT.appendChild(col);
       const addM = document.createElement('button');
       addM.className = 'crew-x';
@@ -4455,7 +4488,6 @@ function renderCrewPanel() {
     const fill = document.createElement('td');
     fill.colSpan = Math.max(1, days.reduce((a, d) => a + (d.h1 - d.h0 + 1), 0));
     fill.className = 'crew-teamfill';
-    fill.style.background = team.color + '33';
     trT.appendChild(fill);
     table.appendChild(trT);
     team.members.forEach(mem => {
@@ -4504,7 +4536,7 @@ function renderCrewPanel() {
       days.forEach(d => {
         for (let h = d.h0; h <= d.h1; h++) {
           const td = document.createElement('td');
-          td.className = 'crew-cell';
+          td.className = 'crew-cell' + (h === d.h0 ? ' crew-day-start' : '');
           td.dataset.m = mem.id;
           td.dataset.d = d.id;
           td.dataset.h = h;
@@ -4559,6 +4591,39 @@ crewPanel.addEventListener('pointerover', e => {
   crewSel.c1 = +td.dataset.ci;
   crewSelHighlight();
 });
+/* 드래그 중 가장자리·화면 밖으로 나가면 표를 자동 스크롤해 범위 확장 */
+let crewPointer = null;
+let crewAutoRaf = null;
+window.addEventListener('pointermove', e => {
+  if (!crewSel) return;
+  crewPointer = { x: e.clientX, y: e.clientY };
+  if (!crewAutoRaf) crewAutoTick();
+}, { passive: true });
+function crewAutoTick() {
+  if (!crewSel) { crewAutoRaf = null; return; }
+  crewAutoRaf = requestAnimationFrame(crewAutoTick);
+  const sc = crewPanel.querySelector('.crew-scroll');
+  if (!sc || !crewPointer) return;
+  const r = sc.getBoundingClientRect();
+  const M = 44, S = 16;
+  let dx = 0, dy = 0;
+  if (crewPointer.x < r.left + M) dx = -S;
+  else if (crewPointer.x > r.right - M) dx = S;
+  if (crewPointer.y < r.top + M) dy = -S;
+  else if (crewPointer.y > r.bottom - M) dy = S;
+  if (!dx && !dy) return;
+  sc.scrollLeft += dx;
+  sc.scrollTop += dy;
+  const px = Math.max(r.left + 2, Math.min(r.right - 2, crewPointer.x));
+  const py = Math.max(r.top + 2, Math.min(r.bottom - 2, crewPointer.y));
+  const el = document.elementFromPoint(px, py);
+  const td = el && el.closest ? el.closest('td.crew-cell') : null;
+  if (td) {
+    crewSel.r1 = +td.dataset.ri;
+    crewSel.c1 = +td.dataset.ci;
+    crewSelHighlight();
+  }
+}
 window.addEventListener('pointerup', () => {
   if (!crewSel) return;
   const cells = crewSelCells();
