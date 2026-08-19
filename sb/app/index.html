@@ -59,6 +59,9 @@ body.following #follow-frame{display:block}
 #follow-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:151;background:#16a34a;color:#fff;border:none;border-radius:999px;height:30px;padding:0 16px;font-size:12.5px;display:none;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(22,163,74,.35)}
 body.following #follow-pill{display:block}
 #follow-pill:hover{background:#15803d}
+#spot-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:152;background:#18181b;color:#fff;border:none;border-radius:999px;height:30px;padding:0 16px;font-size:12.5px;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#spot-pill.hidden{display:none}
+body.mobileview #spot-pill{top:8px}
 #avatars{display:flex;align-items:center;gap:7px;margin:0 4px}
 .av{display:flex;align-items:center}
 .av-circle{width:26px;height:26px;border-radius:50%;border:none;color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-family:inherit;line-height:1}
@@ -116,24 +119,13 @@ body.following #follow-pill{display:block}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
 .dim-rest{color:#a1a1aa;font-size:calc(1em - 1pt);font-style:italic} /* C#·Next 열 첫 줄 제외: 흐림 + 1pt 축소 + 이탤릭 */
-/* 모바일 뷰어 피드 — 크롬 없이 보기 전용 카드 */
+/* 모바일 뷰어 — 크롬 없이 실시간 PDF처럼 전체 페이지 보기 */
 body.mobileview #topbar,body.mobileview #sidebar,body.mobileview #rowtools,body.mobileview #coltools,
-body.mobileview #cmt-btn,body.mobileview #follow-pill,body.mobileview #follow-frame,body.mobileview #cursor-chat{display:none !important}
-body.mobileview #editor-scroll{touch-action:auto}
-#mfeed{padding:14px 12px 70px;max-width:560px;margin:0 auto;font-size:14px}
-.mcard{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:12px;overflow:hidden;position:relative}
-.mcard-num{position:absolute;top:8px;right:10px;z-index:2;background:rgba(24,24,27,.72);color:#fff;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600}
-.mcard-video{display:flex;flex-direction:column;gap:2px;background:#f4f4f5}
-.mcard-video.empty{display:none}
-.mvbox{position:relative;width:100%;aspect-ratio:var(--vratio,1.85);overflow:hidden;background:#fff}
-.mvbox img{width:100%;height:100%;display:block}
-.mcard-info{padding:12px 14px 13px;display:flex;flex-direction:column;gap:10px}
-.mcard-label{font-size:10px;color:#a1a1aa;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
-.mcard-text{line-height:1.55;color:#26262b;word-break:break-word}
-.mcard.mmerged .mcard-info{background:#fafafa}
-.mfd-title{padding:26px 8px 12px;text-align:center}
-.mfd-title-main{font-size:18px;font-weight:800;letter-spacing:-.01em}
-.mfd-title-sub{font-size:12.5px;color:#71717a;margin-top:3px}
+body.mobileview #cmt-btn,body.mobileview #cursor-chat,body.mobileview .cmt-chip{display:none !important}
+body.mobileview #pages{padding:10px 6px 90px}
+#mswitch{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:4px;background:rgba(24,24,27,.85);padding:4px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:94vw;overflow-x:auto}
+#mswitch button{border:none;background:transparent;color:#d4d4d8;font-size:12.5px;padding:7px 14px;border-radius:999px;font-family:inherit;white-space:nowrap;cursor:pointer}
+#mswitch button.on{background:#fff;color:#18181b;font-weight:700}
 .ratio-item{display:flex;align-items:center;gap:6px}
 .ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
 /* 행/열 드래그 이동 표시 */
@@ -363,6 +355,7 @@ tr.mrow .mcell{min-height:14mm}
     <div class="sep"></div>
     <button class="fbtn" id="b-ori" title="용지 방향 전환 (내 화면에만 적용)"></button>
     <div class="grow"></div>
+    <button class="mbtn eo" id="b-spot" title="모든 뷰어가 5초 카운트다운 후 내 시점을 따라오게 합니다">Spotlight Me</button>
     <div id="avatars"></div>
     <button id="my-av" class="av-circle" style="display:none" title="내 프로필 편집"></button>
     <span id="sync-status" style="display:none;font-size:12px;margin:0 6px;white-space:nowrap"></span>
@@ -407,7 +400,7 @@ tr.mrow .mcell{min-height:14mm}
 <div id="login-modal" class="modalwrap" hidden>
   <div class="modal">
     <div class="mtitle">편집자 로그인</div>
-    <input id="li-email" class="minput" type="email" placeholder="이메일" autocomplete="username">
+    <input id="li-email" class="minput" type="text" placeholder="아이디 또는 이메일" autocomplete="username">
     <input id="li-pass" class="minput" type="password" placeholder="비밀번호" autocomplete="current-password">
     <div id="li-err" class="merr"></div>
     <div class="mbtns">
@@ -470,7 +463,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 14:36";
+const BUILD_ID = "2026-08-19 14:54";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -978,89 +971,41 @@ function ensureViewportMeta() {
 }
 function updateMobileView() {
   const want = isViewer() && isMobileScreen();
-  if (want === mobileView) return;
+  if (want === mobileView) { buildMobileSwitch(); return; }
   mobileView = want;
   document.body.classList.toggle('mobileview', mobileView);
-  if (mobileView) ensureViewportMeta();
+  if (mobileView) {
+    ensureViewportMeta();
+    /* 페이지 폭을 화면에 맞춤 — 이후엔 핀치로 자유 확대 */
+    setTimeout(() => { try { setZoom((innerWidth - 12) / (pageMM().w * PXMM) * 100); } catch (e) {} }, 0);
+  }
   renderAll(false);
+  buildMobileSwitch();
 }
 let mvResizeT = null;
 window.addEventListener('resize', () => { clearTimeout(mvResizeT); mvResizeT = setTimeout(updateMobileView, 300); });
-/* 페이지·표 대신 컷 카드 피드: 우상단 S·C 번호, 상단 사진, 하단 Context/Notes/Next */
-function buildMobileFeed() {
-  let feed = $('#mfeed');
-  if (!feed) {
-    feed = document.createElement('div');
-    feed.id = 'mfeed';
-    editorScroll.appendChild(feed);
+/* PDF처럼 전체 페이지를 그대로 보여주고, 하단에 작품 전환 필만 띄운다 */
+function buildMobileSwitch() {
+  let el = $('#mswitch');
+  if (!mobileView) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mswitch';
+    el.className = 'noprint';
+    document.body.appendChild(el);
   }
-  pagesEl.style.display = 'none';
-  feed.innerHTML = '';
-  const textCols = docCols().filter(c => c.kind === 'text' && c.id !== 's' && c.id !== 'c');
-  for (const b of doc.blocks) {
-    if (b.type === 'title') {
-      const t = document.createElement('div'); t.className = 'mfd-title';
-      const m1 = document.createElement('div'); m1.className = 'mfd-title-main'; m1.innerHTML = b.text || '';
-      const m2 = document.createElement('div'); m2.className = 'mfd-title-sub'; m2.innerHTML = b.sub || '';
-      t.append(m1, m2);
-      feed.appendChild(t);
-      continue;
-    }
-    (b.cuts || []).forEach(cut => {
-      const card = document.createElement('div');
-      card.className = 'mcard' + (cut.merged ? ' mmerged' : '');
-      if (!cut.merged) {
-        const num = document.createElement('span');
-        num.className = 'mcard-num';
-        num.textContent = 'S' + (textOf(cut.s) || '–') + ' · C' + (textOf(cut.c) || '–');
-        card.appendChild(num);
-        const vid = document.createElement('div');
-        vid.className = 'mcard-video' + ((cut.imgs || []).length ? '' : ' empty');
-        (cut.imgs || []).forEach(im => {
-          const box = document.createElement('div'); box.className = 'mvbox';
-          const img = document.createElement('img');
-          img.src = im.src;
-          img.style.objectFit = im.fit || 'contain';
-          const tf = imgTransform(im);
-          if (tf) img.style.transform = tf;
-          box.appendChild(img);
-          vid.appendChild(box);
-        });
-        card.appendChild(vid);
-      }
-      const info = document.createElement('div'); info.className = 'mcard-info';
-      if (cut.merged) {
-        if (textOf(cut.context)) {
-          const f = document.createElement('div'); f.className = 'mcard-text'; f.innerHTML = cut.context;
-          info.appendChild(f);
-        }
-      } else {
-        textCols.forEach(col => {
-          const val = cut[col.id];
-          if (!val || !textOf(val)) return;
-          const f = document.createElement('div'); f.className = 'mcard-field';
-          const lab = document.createElement('div'); lab.className = 'mcard-label'; lab.textContent = col.label;
-          const body = document.createElement('div'); body.className = 'mcard-text'; body.innerHTML = val;
-          f.append(lab, body);
-          info.appendChild(f);
-        });
-      }
-      if (info.children.length) card.appendChild(info);
-      if (card.children.length) feed.appendChild(card);
-    });
-  }
+  el.innerHTML = '';
+  Object.keys(films).forEach(n => {
+    const b = document.createElement('button');
+    b.className = n === currentFilm ? 'on' : '';
+    b.textContent = n;
+    b.addEventListener('click', () => switchFilm(n));
+    el.appendChild(b);
+  });
 }
 
 /* ---------- 렌더 ---------- */
 function renderAll(keepCaret = true) {
-  if (mobileView) {
-    applyAutoHl();
-    applyDimLines();
-    buildMobileFeed();
-    return;
-  }
-  const oldFeed = $('#mfeed');
-  if (oldFeed) { oldFeed.remove(); pagesEl.style.display = ''; }
   const cap = keepCaret ? captureCaret() : null;
   const st = editorScroll.scrollTop, sl = editorScroll.scrollLeft;
   applyAutoHl();
@@ -2241,6 +2186,7 @@ function switchFilm(name) {
   updatePageStyle();
   renderAll(false);
   restoreViewState(); /* 이 작품에서 마지막으로 보던 위치로 */
+  buildMobileSwitch();
   syncUrlToFilm();
   if (cloudRole === 'editor') publishPresence();
 }
@@ -2558,6 +2504,16 @@ pagesEl.addEventListener('paste', e => {
 pagesEl.addEventListener('focusin', e => {
   const pg = e.target.closest ? e.target.closest('.page') : null;
   if (pg) { state.activeBlockId = pg.dataset.blockId; scheduleThumbs(); }
+  /* 원격 live 프리뷰가 표시된 셀에 들어가면 그 내용을 내 모델로 채택 */
+  const cell = e.target.closest ? e.target.closest('.cell[contenteditable="true"]') : null;
+  if (cell && !isViewer()) {
+    try {
+      const key = keyOfCell(cell);
+      const mv = cellModelValue(key);
+      const dv = cleanCellHtml(cell);
+      if (mv !== null && mv !== dv) syncCell(cell);
+    } catch (err) {}
+  }
 });
 pagesEl.addEventListener('mousedown', e => {
   const pg = e.target.closest ? e.target.closest('.page') : null;
@@ -3615,25 +3571,25 @@ function captureSelPresence() {
   } catch (err) { return null; }
 }
 let presenceLastSig = '';
+let mySpotTs = 0; /* Spotlight Me 요청 시각 */
 /* 뷰포트 상단이 걸쳐 있는 셀(컷 행) 앵커 — 사용자마다 레이아웃(방향·열 너비)이 달라도
    같은 '내용'을 가리키도록 좌표 대신 셀 기준으로 위치를 공유한다 */
 function viewportAnchor() {
   try {
-    const es = editorScroll.getBoundingClientRect();
-    const x = es.left + es.width / 2;
-    for (const dy of [6, 48, 140]) {
-      const el = document.elementFromPoint(x, es.top + dy);
-      if (!el || !el.closest) continue;
-      const tr = el.closest('tr[data-cut-id]');
-      if (tr) {
+    const esTop = editorScroll.getBoundingClientRect().top;
+    /* 페이지 갭·여백에 상단이 걸려 있어도 항상 앵커를 얻도록 기하 스캔
+       (elementFromPoint 방식은 갭에서 앵커를 놓쳐 ty 폴백 → 배율·레이아웃이
+        다른 사용자에게 엉뚱한 페이지를 보여주는 원인이 됐다) */
+    for (const pg of pagesEl.querySelectorAll('.page')) {
+      const pr = pg.getBoundingClientRect();
+      if (pr.bottom <= esTop + 1) continue;
+      for (const tr of pg.querySelectorAll('tr[data-cut-id]')) {
         const r = tr.getBoundingClientRect();
-        return { cut: tr.dataset.cutId, frac: Math.max(0, Math.min(1, (es.top - r.top) / Math.max(1, r.height))) };
+        if (r.bottom > esTop + 1) {
+          return { cut: tr.dataset.cutId, frac: Math.max(0, Math.min(1, (esTop - r.top) / Math.max(1, r.height))) };
+        }
       }
-      const pg = el.closest('.page');
-      if (pg) {
-        const r = pg.getBoundingClientRect();
-        return { block: pg.dataset.blockId, frac: Math.max(0, Math.min(1, (es.top - r.top) / Math.max(1, r.height))) };
-      }
+      return { block: pg.dataset.blockId, frac: Math.max(0, Math.min(1, (esTop - pr.top) / Math.max(1, pr.height))) };
     }
   } catch (e) {}
   return null;
@@ -3645,15 +3601,30 @@ function sendPresence() {
   const ty = editorScroll.scrollTop / z;
   const cy = (editorScroll.scrollTop + editorScroll.clientHeight / 2) / z;
   let m = null;
-  if (mouseClient) {
+  if (mouseClient && !followUid) { /* 누군가를 따라가는 중엔 내 커서를 상대에게 보내지 않음 */
     const pr = pagesEl.getBoundingClientRect();
     m = { x: Math.round((mouseClient.x - pr.left) / z), y: Math.round((mouseClient.y - pr.top) / z) };
   }
+  /* 편집 중인 셀의 내용을 presence로 실시간 스트리밍 — 상대 화면에 즉시 반영 */
+  let live = null;
+  try {
+    const ae = document.activeElement;
+    const cell = ae && ae.closest ? ae.closest('.cell[contenteditable="true"]') : null;
+    if (cell && Date.now() - lastInputTs < 4000 && !cell.classList.contains('mcell')) {
+      const key = keyOfCell(cell);
+      const html = cell.innerHTML;
+      if (html.length <= 20000) {
+        live = { f: key.f, cut: key.cut, block: key.block,
+          nth: [...pagesEl.querySelectorAll(caretSelector(key))].indexOf(cell), html };
+      }
+    }
+  } catch (e) {}
   const p = {
     name: myName, ty: Math.round(ty), cy: Math.round(cy), z: Math.round(z * 100),
     film: currentFilm, m, car: captureSelPresence(), a: viewportAnchor(),
     act: Math.floor(lastActiveTs / 15000) * 15000, /* 활동 시각(15초 단위 — 시그니처 변화 최소화) */
-    chat: cursorChatPayload()
+    chat: cursorChatPayload(), live,
+    spot: (mySpotTs && Date.now() - mySpotTs < 12000) ? mySpotTs : null
   };
   /* 내용이 그대로면 전송 생략 — 신선도(25초 창) 유지를 위한 하트비트만 통과 */
   const sig = JSON.stringify(p);
@@ -3824,6 +3795,47 @@ function jumpToUser(id) {
   editorScroll.scrollTo({ top: Math.max(0, followWantTop(p)), behavior: 'smooth' });
 }
 $('#follow-pill').addEventListener('click', () => setFollow(null));
+/* ---------- Spotlight Me ---------- */
+$('#b-spot').addEventListener('click', () => {
+  if (cloudRole !== 'editor') return;
+  mySpotTs = Date.now();
+  presenceLastSig = '';
+  publishPresence();
+  toast('모든 뷰어에게 스포트라이트를 시작합니다 — 5초 후 내 시점을 따라옵니다');
+});
+let spotHandled = 0;
+let spotTimer = null;
+const spotPill = document.createElement('button');
+spotPill.id = 'spot-pill';
+spotPill.className = 'hidden noprint';
+document.body.appendChild(spotPill);
+spotPill.addEventListener('click', () => { clearInterval(spotTimer); spotPill.classList.add('hidden'); });
+function startSpotCountdown(uid2, name) {
+  clearInterval(spotTimer);
+  let n = 5;
+  spotPill.textContent = name + ' 님의 스포트라이트 — ' + n + '초 후 따라갑니다 (클릭하여 거부)';
+  spotPill.classList.remove('hidden');
+  spotTimer = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(spotTimer);
+      spotPill.classList.add('hidden');
+      setFollow(uid2);
+      return;
+    }
+    spotPill.textContent = name + ' 님의 스포트라이트 — ' + n + '초 후 따라갑니다 (클릭하여 거부)';
+  }, 1000);
+}
+function checkSpotlights() {
+  if (!isViewer()) return; /* 스포트라이트 대상은 뷰어 */
+  for (const [id, pr] of othersFresh()) {
+    if (pr.spot && pr.spot > spotHandled && Date.now() - pr.spot < 15000) {
+      spotHandled = pr.spot;
+      startSpotCountdown(id, pr.name || '편집자');
+      return;
+    }
+  }
+}
 /* 따라가는 중에 사용자가 직접 스크롤하면 자동 해제 */
 editorScroll.addEventListener('wheel', () => { if (followUid) setFollow(null); }, { passive: true });
 editorScroll.addEventListener('touchmove', () => { if (followUid) setFollow(null); }, { passive: true });
@@ -3964,7 +3976,7 @@ function updateRemoteGroup(g, p, z, pr, col) {
 function renderRemote() {
   const layer = pagesEl.querySelector('#remote-layer');
   /* 커서·캐럿은 최근 활동자만 — 자리 비운 사람 커서가 문서에 남지 않게 */
-  const list = (cloudRole === 'off' || mobileView) ? [] : othersFresh().filter(([id, p]) => p.film === currentFilm && isLiveP(p));
+  const list = cloudRole === 'off' ? [] : othersFresh().filter(([id, p]) => p.film === currentFilm && isLiveP(p));
   if (!list.length) { if (layer) layer.remove(); return; }
   const L = ensureRemoteLayer();
   const z = zoomFactor();
@@ -3974,7 +3986,21 @@ function renderRemote() {
     let g = L.querySelector(':scope > [data-uid="' + id + '"]');
     if (!g) { g = buildRemoteGroup(id); L.appendChild(g); }
     updateRemoteGroup(g, p, z, pr, profColor(id));
+    applyRemoteLive(p);
   }
+}
+/* 상대가 편집 중인 셀의 실시간 내용을 화면에 즉시 반영 (모델은 정식 발행·병합이 갱신) */
+function applyRemoteLive(p) {
+  const lv = p.live;
+  if (!lv || !lv.f) return;
+  try {
+    const key = { f: lv.f, cut: lv.cut || null, block: lv.block || null };
+    const cells = [...pagesEl.querySelectorAll(caretSelector(key))];
+    const cell = cells[Math.min(Math.max(lv.nth || 0, 0), cells.length - 1)];
+    if (!cell) return;
+    if (document.activeElement === cell) return; /* 내가 편집 중인 셀은 덮지 않음 */
+    if (cell.innerHTML !== lv.html) cell.innerHTML = lv.html;
+  } catch (e) {}
 }
 function refreshPresenceUI() {
   if (followUid && !isFreshP(presences[followUid])) setFollow(null);
@@ -3987,6 +4013,7 @@ function subscribePresence() {
   const h = ref.on('value', snap => {
     presences = snap.val() || {};
     refreshPresenceUI();
+    checkSpotlights();
   });
   const prRef = boardRef('profiles');
   const prH = prRef.on('value', snap => {
@@ -4406,7 +4433,9 @@ async function enterEditorMode() {
 async function doLogin() {
   try {
     $('#li-err').textContent = '';
-    await fb.auth.signInWithEmailAndPassword($('#li-email').value.trim(), $('#li-pass').value);
+    const raw = $('#li-email').value.trim();
+    const email = raw.includes('@') ? raw : raw + '@sb.gyu.dev'; /* 아이디만 입력하면 자동 보정 */
+    await fb.auth.signInWithEmailAndPassword(email, $('#li-pass').value);
     $('#login-modal').hidden = true;
   } catch (e) {
     $('#li-err').textContent = '로그인 실패 — 이메일과 비밀번호를 확인하세요';
@@ -4598,6 +4627,7 @@ window.__sb = {
     maybeRepublishAhead,
     setDelayHook(fn) { collabDelayHook = fn; },
     setFb(f) { fb = f; },
+    setMyUid(u) { myUid = u; myName = myName || '테스터'; },
     queue: collabQueue
   },
   backup: { tick: backupTick, list: backupList },
@@ -4605,7 +4635,7 @@ window.__sb = {
     setFollow, jump: jumpToUser,
     applyPresence(id, v) { presences[id] = v; refreshPresenceUI(); },
     get presences() { return presences; },
-    captureSel: captureSelPresence, renderRemote, buildAvatarBar
+    captureSel: captureSelPresence, renderRemote, buildAvatarBar, checkSpotlights
   },
   setOrientation(o) { vp().ori = o; saveViewPrefs(); updatePageStyle(); renderAll(false); }
 };
