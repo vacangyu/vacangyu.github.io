@@ -139,7 +139,8 @@ body.mobileview #spot-pill{top:8px}
 .crew-hd1 th,.crew-hd2 th{position:sticky;background:#fff;z-index:3}
 .crew-hd1 th{top:0;border-bottom:none;height:34px;box-sizing:border-box}
 .crew-hd2 th{top:34px;height:26px;box-sizing:border-box;border-bottom:1.5px solid #d4d4d8}
-.crew-corner{background:#fff}
+.crew-corner{background:#fff;position:sticky;left:0;z-index:6 !important}
+.crew-hd2 th.crew-left{z-index:6} /* 좌상단 팀/이름/역할이 가로 스크롤 시 시간 헤더 위에 유지 */
 .crew-day{padding:0 10px 0 14px;text-align:left;vertical-align:middle}
 .crew-day-label{font-weight:800;margin-right:7px;font-size:13px}
 .crew-day-sub{color:#a1a1aa;font-weight:500}
@@ -170,14 +171,19 @@ body.viewer .crew-cell{cursor:default}
 .crew-handle:hover{color:#71717a}
 .crew-drop td{box-shadow:inset 0 -2.5px 0 #2563eb}
 .crew-hint{padding:8px 18px;font-size:11.5px;color:#c4c4ca;border-top:1px solid #f6f6f8}
-body.mobileview #crew-panel,body.mobileview #b-crew-table{display:none !important}
-/* 모바일 뷰어 — 크롬 없이 실시간 PDF처럼 전체 페이지 보기 */
-body.mobileview #topbar,body.mobileview #sidebar,body.mobileview #rowtools,body.mobileview #coltools,
-body.mobileview #cmt-btn,body.mobileview #cursor-chat,body.mobileview .cmt-chip{display:none !important}
-body.mobileview #pages{padding:10px 6px 90px}
-#mswitch{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:4px;background:rgba(24,24,27,.85);padding:4px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:94vw;overflow-x:auto}
-#mswitch button{border:none;background:transparent;color:#d4d4d8;font-size:12.5px;padding:7px 14px;border-radius:999px;font-family:inherit;white-space:nowrap;cursor:pointer}
-#mswitch button.on{background:#fff;color:#18181b;font-weight:700}
+/* 모바일 뷰어 — 앱 UI 유지, 툴바를 터치 친화적으로 (사이드바·호버성 UI만 숨김) */
+body.mobileview #sidebar,body.mobileview #b-side,body.mobileview #rowtools,body.mobileview #coltools,
+body.mobileview #cmt-btn,body.mobileview #cursor-chat{display:none !important}
+body.mobileview #pages{padding:10px 6px 60px}
+body.mobileview #bar-top{padding:8px 12px 0}
+body.mobileview .mbtn.film{font-size:16px}
+body.mobileview #bar-menu{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding:6px 10px 10px;scrollbar-width:none}
+body.mobileview #bar-menu::-webkit-scrollbar{display:none}
+body.mobileview #bar-menu .mbtn,body.mobileview #bar-menu .fbtn{height:34px;font-size:13px;flex:0 0 auto}
+body.mobileview .pop{max-height:60vh;overflow:auto}
+body.mobileview #crew-panel .crew-head{padding:10px 12px;gap:10px}
+body.mobileview .crew-tools{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+body.mobileview .crew-chip{flex:0 0 auto}
 .ratio-item{display:flex;align-items:center;gap:6px}
 .ratio-mark{width:12px;text-align:center;color:#16a34a;font-weight:700;flex:0 0 auto}
 /* 행/열 드래그 이동 표시 */
@@ -516,7 +522,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 17:07";
+const BUILD_ID = "2026-08-19 20:19";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -1037,24 +1043,10 @@ function updateMobileView() {
 }
 let mvResizeT = null;
 window.addEventListener('resize', () => { clearTimeout(mvResizeT); mvResizeT = setTimeout(updateMobileView, 300); });
-/* PDF처럼 전체 페이지를 그대로 보여주고, 하단에 작품 전환 필만 띄운다 */
+/* (구) 하단 작품 전환 필 — 툴바의 작품 드롭다운으로 대체되어 제거만 담당 */
 function buildMobileSwitch() {
-  let el = $('#mswitch');
-  if (!mobileView) { if (el) el.remove(); return; }
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'mswitch';
-    el.className = 'noprint';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = '';
-  Object.keys(films).forEach(n => {
-    const b = document.createElement('button');
-    b.className = n === currentFilm ? 'on' : '';
-    b.textContent = n;
-    b.addEventListener('click', () => switchFilm(n));
-    el.appendChild(b);
-  });
+  const el = $('#mswitch');
+  if (el) el.remove();
 }
 
 /* ---------- 렌더 ---------- */
