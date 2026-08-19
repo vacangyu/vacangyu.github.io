@@ -463,7 +463,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 15:17";
+const BUILD_ID = "2026-08-19 15:39";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -3578,19 +3578,48 @@ let mySpotTs = 0; /* Spotlight Me 요청 시각 */
 function viewportAnchor() {
   try {
     const esTop = editorScroll.getBoundingClientRect().top;
-    /* 페이지 갭·여백에 상단이 걸려 있어도 항상 앵커를 얻도록 기하 스캔
-       (elementFromPoint 방식은 갭에서 앵커를 놓쳐 ty 폴백 → 배율·레이아웃이
-        다른 사용자에게 엉뚱한 페이지를 보여주는 원인이 됐다) */
-    for (const pg of pagesEl.querySelectorAll('.page')) {
+    /* 페이지 갭·여백에 상단이 걸려 있어도 항상 앵커를 얻도록 기하 스캔.
+       frac은 '해당 조각 내'가 아니라 컷 전체(슬라이스 합산) 기준 —
+       조각 단위 frac은 수신 측이 첫 조각에 적용해 한 페이지 위로 튀는 원인이었다. */
+    const pgs = [...pagesEl.querySelectorAll('.page')];
+    const cutAnchorOf = (tr, extra) => {
+        const id = tr.dataset.cutId;
+        const list = [...pagesEl.querySelectorAll('tr[data-cut-id="' + id + '"]')];
+        const idx = list.indexOf(tr);
+        let total = 0, acc = 0;
+        list.forEach((t, i) => {
+          const h = t.getBoundingClientRect().height;
+          total += h;
+          if (i < idx) acc += h;
+        });
+        acc += extra;
+        return { cut: id, frac: Math.max(0, Math.min(1, total > 0 ? acc / total : 0)) };
+    };
+    for (const pg of pgs) {
       const pr = pg.getBoundingClientRect();
       if (pr.bottom <= esTop + 1) continue;
-      for (const tr of pg.querySelectorAll('tr[data-cut-id]')) {
+      const rows = pg.querySelectorAll('tr[data-cut-id]');
+      for (const tr of rows) {
         const r = tr.getBoundingClientRect();
-        if (r.bottom > esTop + 1) {
-          return { cut: tr.dataset.cutId, frac: Math.max(0, Math.min(1, (esTop - r.top) / Math.max(1, r.height))) };
-        }
+        if (r.bottom > esTop + 1) return cutAnchorOf(tr, Math.max(0, esTop - r.top));
+      }
+      /* 상단이 이 페이지의 모든 행 아래(하단 여백)에 있음 — 블록 앵커는 여러 페이지짜리
+         보드 블록에서 첫 페이지로 튀므로, 이 페이지 마지막 행의 끝을 앵커로 쓴다 */
+      if (rows.length) {
+        const lastTr = rows[rows.length - 1];
+        return cutAnchorOf(lastTr, lastTr.getBoundingClientRect().height);
       }
       return { block: pg.dataset.blockId, frac: Math.max(0, Math.min(1, (esTop - pr.top) / Math.max(1, pr.height))) };
+    }
+    /* 문서 맨 끝 여백 — 마지막 페이지의 마지막 행 끝을 앵커로 (null이면 ty 폴백으로 튐) */
+    const last = pgs[pgs.length - 1];
+    if (last) {
+      const rows = last.querySelectorAll('tr[data-cut-id]');
+      if (rows.length) {
+        const lastTr = rows[rows.length - 1];
+        return cutAnchorOf(lastTr, lastTr.getBoundingClientRect().height);
+      }
+      return { block: last.dataset.blockId, frac: 1 };
     }
   } catch (e) {}
   return null;
@@ -3759,13 +3788,31 @@ function setFollow(uidTo) {
 /* 셀 앵커 → 내 레이아웃에서의 목표 scrollTop. 사용자별 방향·열 너비가 달라도 같은 셀에 도착 */
 function anchorWantTop(a) {
   if (!a) return null;
-  let el = null;
-  if (a.cut) el = pagesEl.querySelector('tr[data-cut-id="' + a.cut + '"]');
-  if (!el && a.block) el = pagesEl.querySelector('.page[data-block-id="' + a.block + '"]');
-  if (!el) return null;
-  const r = el.getBoundingClientRect();
   const es = editorScroll.getBoundingClientRect();
-  return editorScroll.scrollTop + (r.top - es.top) + (a.frac || 0) * r.height;
+  if (a.cut) {
+    /* frac을 컷 전체(내 레이아웃의 모든 슬라이스 합산)에 대응시켜 해당 조각을 찾는다 */
+    const list = [...pagesEl.querySelectorAll('tr[data-cut-id="' + a.cut + '"]')];
+    if (list.length) {
+      const hs = list.map(t => t.getBoundingClientRect().height);
+      const total = hs.reduce((x, y) => x + y, 0);
+      let off = Math.max(0, Math.min(1, a.frac || 0)) * total;
+      for (let i = 0; i < list.length; i++) {
+        if (off <= hs[i] || i === list.length - 1) {
+          const r = list[i].getBoundingClientRect();
+          return editorScroll.scrollTop + (r.top - es.top) + Math.min(off, hs[i]);
+        }
+        off -= hs[i];
+      }
+    }
+  }
+  if (a.block) {
+    const el = pagesEl.querySelector('.page[data-block-id="' + a.block + '"]');
+    if (el) {
+      const r = el.getBoundingClientRect();
+      return editorScroll.scrollTop + (r.top - es.top) + (a.frac || 0) * r.height;
+    }
+  }
+  return null;
 }
 /* 좌표(ty) 폴백 — 구버전 presence 또는 앵커 해석 실패 시 근사 도착 */
 function followWantTop(p) {
@@ -4666,7 +4713,8 @@ window.__sb = {
     setFollow, jump: jumpToUser,
     applyPresence(id, v) { presences[id] = v; refreshPresenceUI(); },
     get presences() { return presences; },
-    captureSel: captureSelPresence, renderRemote, buildAvatarBar, checkSpotlights
+    captureSel: captureSelPresence, renderRemote, buildAvatarBar, checkSpotlights,
+    viewportAnchor, anchorWantTop
   },
   setOrientation(o) { vp().ori = o; saveViewPrefs(); updatePageStyle(); renderAll(false); }
 };
