@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스토리보드</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
+  background:#ececf0;color:#18181b;display:flex;justify-content:center;padding:56px 20px 40px;
+}
+.wrap{width:100%;max-width:640px}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 4px}
+.sub{font-size:12.5px;color:#71717a;margin:0 0 22px}
+.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11.5px;font-weight:600;color:#71717a;text-align:left;padding:10px 16px;border-bottom:1px solid #e4e4e7;background:#fafafa}
+td{padding:0;border-bottom:1px solid #f4f4f5}
+tr:last-child td{border-bottom:none}
+td a{display:flex;align-items:center;gap:14px;padding:13px 16px;color:inherit;text-decoration:none}
+tr:hover td{background:#fafafa}
+.num{color:#a1a1aa;font-size:12.5px;width:18px;text-align:right;flex:0 0 auto}
+.name{font-weight:600;flex:1}
+.go{color:#a1a1aa;font-size:12px}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.add{height:34px;padding:0 16px;border:1px solid #e4e4e7;background:#fff;border-radius:8px;font-size:13.5px;font-family:inherit;color:#18181b;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.add:hover{background:#f4f4f5}
+.meta{font-size:11.5px;color:#a1a1aa}
+.empty{padding:26px 16px;color:#a1a1aa;font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>스토리보드</h1>
+  <p class="sub">작품을 선택하면 스토리보드로 이동합니다</p>
+  <div class="card">
+    <table>
+      <thead><tr><th>작품</th></tr></thead>
+      <tbody id="rows"><tr><td><div class="empty">불러오는 중…</div></td></tr></tbody>
+    </table>
+  </div>
+  <div class="foot">
+    <a class="add" href="/sb/app/?new=1">＋ 새 작품 추가</a>
+    <span class="meta" id="meta"></span>
+  </div>
+</div>
+<script>
+'use strict';
+const DATABASE_URL = null; /* ← 빌드 시 firebase-config.json의 databaseURL 주입 */
+const FALLBACK = ['시절인, 연', '개구리'];
+function render(names) {
+  const tb = document.getElementById('rows');
+  tb.innerHTML = '';
+  if (!names.length) {
+    tb.innerHTML = '<tr><td><div class="empty">등록된 작품이 없습니다</div></td></tr>';
+    return;
+  }
+  names.forEach((n, i) => {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    const a = document.createElement('a');
+    a.href = '/sb/' + (i + 1);
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
+    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = n;
+    const go = document.createElement('span'); go.className = 'go'; go.textContent = '열기 →';
+    a.append(num, nm, go);
+    td.appendChild(a);
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+}
+async function load() {
+  if (!DATABASE_URL) { render(FALLBACK); return; }
+  try {
+    const r = await fetch(DATABASE_URL.replace(/\/$/, '') + '/boards/main/doc.json');
+    const docJson = await r.json(); /* DB에는 JSON 문자열로 저장되어 있음 */
+    const obj = JSON.parse(docJson);
+    const names = Object.keys(obj.films || {});
+    render(names.length ? names : FALLBACK);
+  } catch (e) { render(FALLBACK); }
+  try {
+    const r = await fetch(DATABASE_URL.replace(/\/$/, '') + '/boards/main/meta.json');
+    const meta = await r.json();
+    if (meta && meta.updatedAt) {
+      document.getElementById('meta').textContent =
+        '마지막 수정 ' + new Date(meta.updatedAt).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+  } catch (e) {}
+}
+load();
+</script>
+</body>
+</html>
