@@ -120,6 +120,48 @@ body.mobileview #spot-pill{top:8px}
 .cast-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:2px 4px}
 .cast-x:hover{color:#dc2626}
 .dim-rest{color:#a1a1aa;font-size:calc(1em - 1pt);font-style:italic} /* C#·Next 열 첫 줄 제외: 흐림 + 1pt 축소 + 이탤릭 */
+/* 인원표 패널 */
+#crew-panel{position:fixed;inset:0;z-index:200;background:#fff;display:flex;flex-direction:column}
+#crew-panel.hidden{display:none}
+.crew-head{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid #e4e4e7;flex-wrap:wrap}
+.crew-title{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.crew-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1}
+.crew-chip{border:1.5px solid transparent;border-radius:999px;height:26px;padding:0 11px;font-size:12px;font-weight:600;color:#18181b;cursor:pointer;font-family:inherit}
+.crew-chip.on{border-color:#18181b;box-shadow:0 0 0 2px rgba(24,24,27,.15)}
+.crew-chip.cx{background:repeating-linear-gradient(45deg,#fca5a5 0 4px,#fff 4px 8px)}
+.crew-chip.ro{cursor:default}
+.crew-acts{display:flex;gap:6px}
+.crew-scroll{flex:1;overflow:auto}
+.crew-table{border-collapse:collapse;font-size:12px}
+.crew-table th,.crew-table td{border:1px solid #e4e4e7;white-space:nowrap}
+.crew-hd1 th,.crew-hd2 th{position:sticky;background:#fafafa;z-index:3}
+.crew-hd1 th{top:0}
+.crew-hd2 th{top:34px}
+.crew-corner{background:#fafafa}
+.crew-day{padding:4px 8px;text-align:left;height:26px}
+.crew-day-label{font-weight:800;margin-right:6px}
+.crew-day-sub{color:#71717a;font-weight:400}
+.crew-day-rng{margin-left:8px;color:#a1a1aa;font-weight:400}
+.crew-day-rng input{width:40px;border:1px solid #e4e4e7;border-radius:5px;font-size:11px;padding:1px 3px;font-family:inherit}
+.crew-h{width:26px;min-width:26px;text-align:center;padding:2px 0;font-weight:500;color:#71717a}
+.crew-left{position:sticky;background:#fff;z-index:2;padding:3px 8px}
+th.crew-left{background:#fafafa}
+.crew-l0{left:0;min-width:44px}
+.crew-l1{left:44px;min-width:72px;font-weight:600}
+.crew-l2{left:116px;min-width:64px;color:#71717a;font-size:11px}
+.crew-teamcell{left:0;font-weight:800;z-index:2}
+.crew-team-name{margin-right:6px}
+.crew-teamcolor{width:22px;height:18px;border:none;padding:0;background:none;cursor:pointer;vertical-align:middle}
+.crew-teamfill{border-left:none}
+.crew-cell{width:26px;min-width:26px;height:24px;cursor:crosshair}
+.crew-cell.cx{background:repeating-linear-gradient(45deg,#f87171 0 4px,#fff 4px 8px) !important}
+body.viewer .crew-cell{cursor:default}
+.crew-x{border:none;background:none;color:#a1a1aa;cursor:pointer;font-size:11px;padding:1px 4px;font-family:inherit}
+.crew-x:hover{color:#18181b}
+.crew-handle{cursor:grab;color:#a1a1aa;margin-right:3px;user-select:none}
+.crew-drop td{box-shadow:inset 0 -2.5px 0 #2563eb}
+.crew-hint{padding:7px 16px;font-size:11.5px;color:#a1a1aa;border-top:1px solid #f4f4f5}
+body.mobileview #crew-panel,body.mobileview #b-crew-table{display:none !important}
 /* 모바일 뷰어 — 크롬 없이 실시간 PDF처럼 전체 페이지 보기 */
 body.mobileview #topbar,body.mobileview #sidebar,body.mobileview #rowtools,body.mobileview #coltools,
 body.mobileview #cmt-btn,body.mobileview #cursor-chat,body.mobileview .cmt-chip{display:none !important}
@@ -319,6 +361,7 @@ tr.mrow .mcell{min-height:14mm}
         <button class="pitem" id="b-localfonts" title="이 컴퓨터의 폰트 목록 불러오기 (Chrome/Edge)">로컬 폰트 불러오기</button>
       </div>
     </div>
+    <button class="mbtn" id="b-crew-table" title="팀별 인원 가용 시간표">인원표</button>
     <div class="menu">
       <button class="mbtn" data-menu>보기</button>
       <div class="pop" style="min-width:230px">
@@ -1008,6 +1051,7 @@ function renderAll(keepCaret = true) {
   if (cap) restoreCaret(cap);
   scheduleThumbs();
   refreshCommentChips();
+  if (crewOpen()) renderCrewPanel(); /* 원격 병합으로 인원표가 갱신됐을 수 있음 */
 }
 const scheduleRender = debounce(() => {
   /* 한글 IME: 조합 중·직후의 재렌더는 조합을 끊어 자모가 유실됨 — 뒤로 미룸.
@@ -2100,6 +2144,7 @@ async function saveDoc() {
 }
 function normalizeFilm(f) {
   const film = {
+    ...(f || {}), /* crew(인원표) 등 부가 필드 보존 */
     settings: { ...defaultSettings(), ...((f && f.settings) || {}) },
     blocks: f && Array.isArray(f.blocks) ? f.blocks : []
   };
@@ -3332,7 +3377,7 @@ $('#b-side').addEventListener('click', () => document.body.classList.toggle('sid
 
 /* --- 단축키 / 종료 경고 --- */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeCmtPanel(); hideCmtBtn(); selectVideoCell(null); clearMfig(); closeMenus(); hideRowtools(); hideColtools(); return; }
+  if (e.key === 'Escape') { if (crewOpen()) { closeCrewPanel(); return; } closeCmtPanel(); hideCmtBtn(); selectVideoCell(null); clearMfig(); closeMenus(); hideRowtools(); hideColtools(); return; }
   /* 따라가기 중 키보드 스크롤(방향키·페이지·스페이스) → 자동 해제 */
   if (followUid && ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key) &&
       !(e.target && (e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'))) setFollow(null);
@@ -4091,6 +4136,463 @@ function subscribePresence() {
   };
 }
 
+
+/* ============================================================
+   인원표 — 팀별 인원 × 날짜/시간 가용표 (뷰어 열람, 편집자만 수정)
+   셀: 팀색 채움 = 확실 가능(타 팀 배정 가능), 빨간 빗금 = 확실 불가, 빈칸 = 미정
+   단축키: 1~8 = 팀 선택, 9 = 불가, 0 = 지우개. 클릭/드래그로 칠하기.
+   ============================================================ */
+const CREW_COLORS = ['#93c5fd', '#fca5a5', '#fcd34d', '#86efac', '#c4b5fd', '#f9a8d4', '#67e8f9', '#fdba74'];
+function crewSeedFor(filmName) {
+  const team = (name, i, members) => ({ id: 'ct' + uid(), name, color: CREW_COLORS[i % CREW_COLORS.length], members: members.map(m => ({ id: 'cm' + uid(), name: m[0], role: m[1] || '' })) });
+  if (filmName === '개구리') {
+    return {
+      teams: [
+        team('연출', 0, [['정성원', '팀장'], ['윤주경', '풀타임'], ['박서진'], ['이서준']]),
+        team('제작', 1, [['김서진', '팀장'], ['김아현', '풀타임'], ['김예원']]),
+        team('촬영', 2, [['박광규', '팀장'], ['서성빈', '1st AC'], ['서준호', 'Cam OP'], ['김해나'], ['류주현'], ['진의행'], ['정우홍'], ['김령서'], ['황도윤'], ['성재민'], ['릴가은']]),
+        team('음향', 3, [['한태연', '팀장'], ['김현'], ['김현욱'], ['남홍석']]),
+        team('미술', 4, [['임정빈', '팀장'], ['신시아'], ['안소율'], ['안희윤']])
+      ],
+      days: [
+        { id: 'cd' + uid(), label: '22일', sub: '리허설', h0: 9, h1: 20 },
+        { id: 'cd' + uid(), label: '25일', sub: '본촬영 1일차', h0: 5, h1: 20 },
+        { id: 'cd' + uid(), label: '27일', sub: '본촬영 2일차', h0: 5, h1: 20 }
+      ],
+      marks: {}
+    };
+  }
+  return {
+    teams: ['연출', '제작', '촬영', '음향', '미술'].map((n, i) => team(n, i, [])),
+    days: [],
+    marks: {}
+  };
+}
+function crewData() { return doc.crew || null; }
+let crewTool = null;      /* 현재 도구: 팀 id | 'X' | null(지우개) */
+let crewPainting = false;
+const crewPanel = document.createElement('div');
+crewPanel.id = 'crew-panel';
+crewPanel.className = 'hidden noprint';
+document.body.appendChild(crewPanel);
+function crewOpen() { return !crewPanel.classList.contains('hidden'); }
+function crewCanEdit() { return cloudRole === 'editor' || cloudRole === 'off'; }
+function crewMutate(fn) {
+  if (!crewCanEdit()) return;
+  const before = JSON.stringify(doc.crew || null);
+  fn();
+  const filmDoc = doc;
+  pushOp(() => { const v = JSON.parse(before); if (v) filmDoc.crew = v; else delete filmDoc.crew; });
+  markDirty();
+  publishFast();
+  renderCrewPanel();
+}
+function crewMarkOf(mId, dId, h) {
+  const c = crewData();
+  return c && c.marks && c.marks[mId] && c.marks[mId][dId] ? c.marks[mId][dId][h] : undefined;
+}
+function crewSetMark(mId, dId, h, val) {
+  const c = crewData();
+  if (!c) return;
+  c.marks = c.marks || {};
+  const mm = c.marks[mId] = c.marks[mId] || {};
+  const dm = mm[dId] = mm[dId] || {};
+  if (val == null) delete dm[h]; else dm[h] = val;
+  if (!Object.keys(dm).length) delete mm[dId];
+  if (!Object.keys(mm).length) delete c.marks[mId];
+}
+function crewPaintCell(td) {
+  if (!crewCanEdit() || !td) return;
+  const { m, d, h } = td.dataset;
+  const cur = crewMarkOf(m, d, h);
+  const want = crewTool == null ? null : crewTool;
+  if ((cur == null && want == null) || cur === want) return;
+  const c = crewData();
+  const before = JSON.stringify(c.marks || {});
+  crewSetMark(m, d, +h, want);
+  const filmDoc = doc;
+  pushOp(() => { if (filmDoc.crew) filmDoc.crew.marks = JSON.parse(before); });
+  markDirty();
+  publishFast();
+  crewApplyCellStyle(td, want);
+}
+function crewApplyCellStyle(td, val) {
+  const c = crewData();
+  td.classList.remove('cx');
+  td.style.background = '';
+  if (val === 'X') td.classList.add('cx');
+  else if (val) {
+    const t = (c.teams || []).find(x => x.id === val);
+    if (t) td.style.background = t.color;
+  }
+}
+/* 인라인 텍스트 편집 헬퍼 (Enter/blur 확정, Esc 취소) */
+function crewInlineEdit(el, get, set) {
+  if (!crewCanEdit()) return;
+  el.contentEditable = 'true';
+  el.focus();
+  try { const r = document.createRange(); r.selectNodeContents(el); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); } catch (e) {}
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    el.contentEditable = 'false';
+    const nv = (el.textContent || '').trim();
+    if (commit && nv !== get()) crewMutate(() => set(nv));
+    else renderCrewPanel();
+  };
+  el.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  el.addEventListener('blur', () => finish(true), { once: true });
+}
+function openCrewPanel() {
+  if (!crewData()) {
+    if (!crewCanEdit()) { toast('편집자가 아직 인원표를 만들지 않았습니다'); return; }
+    crewMutate(() => { doc.crew = crewSeedFor(currentFilm); });
+  }
+  crewPanel.classList.remove('hidden');
+  crewTool = null;
+  renderCrewPanel();
+}
+function closeCrewPanel() { crewPanel.classList.add('hidden'); }
+$('#b-crew-table').addEventListener('click', () => { crewOpen() ? closeCrewPanel() : openCrewPanel(); });
+function renderCrewPanel() {
+  if (!crewOpen()) return;
+  /* 패널 안에서 텍스트 편집 중이면 원격 갱신에 의한 재구축 연기 */
+  if (crewPanel.contains(document.activeElement) &&
+      (document.activeElement.isContentEditable || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) return;
+  const c = crewData();
+  if (!c) { closeCrewPanel(); return; }
+  const edit = crewCanEdit();
+  crewPanel.innerHTML = '';
+  /* 헤더: 제목 + 도구 팔레트 + 관리 버튼 */
+  const head = document.createElement('div');
+  head.className = 'crew-head';
+  const ttl = document.createElement('div');
+  ttl.className = 'crew-title';
+  ttl.textContent = currentFilm + ' 인원표';
+  head.appendChild(ttl);
+  const tools = document.createElement('div');
+  tools.className = 'crew-tools';
+  if (edit) {
+    (c.teams || []).forEach((t, i) => {
+      const chip = document.createElement('button');
+      chip.className = 'crew-chip' + (crewTool === t.id ? ' on' : '');
+      chip.style.background = t.color;
+      chip.textContent = (i < 8 ? (i + 1) + ' ' : '') + t.name;
+      chip.title = '이 팀 색으로 칠하기' + (i < 8 ? ' (단축키 ' + (i + 1) + ')' : '');
+      chip.addEventListener('click', () => { crewTool = t.id; renderCrewPanel(); });
+      tools.appendChild(chip);
+    });
+    const xchip = document.createElement('button');
+    xchip.className = 'crew-chip cx' + (crewTool === 'X' ? ' on' : '');
+    xchip.textContent = '9 불가';
+    xchip.title = '확실히 불가능 — 빨간 빗금 (단축키 9)';
+    xchip.addEventListener('click', () => { crewTool = 'X'; renderCrewPanel(); });
+    tools.appendChild(xchip);
+    const echip = document.createElement('button');
+    echip.className = 'crew-chip' + (crewTool === null ? ' on' : '');
+    echip.textContent = '0 지우개';
+    echip.title = '미정으로 비우기 (단축키 0)';
+    echip.addEventListener('click', () => { crewTool = null; renderCrewPanel(); });
+    tools.appendChild(echip);
+  } else {
+    (c.teams || []).forEach(t => {
+      const chip = document.createElement('span');
+      chip.className = 'crew-chip ro';
+      chip.style.background = t.color;
+      chip.textContent = t.name;
+      tools.appendChild(chip);
+    });
+    const xchip = document.createElement('span');
+    xchip.className = 'crew-chip cx ro';
+    xchip.textContent = '불가';
+    tools.appendChild(xchip);
+  }
+  head.appendChild(tools);
+  const acts = document.createElement('div');
+  acts.className = 'crew-acts';
+  if (edit) {
+    const addDay = document.createElement('button');
+    addDay.className = 'mbtn';
+    addDay.textContent = '＋ 날짜';
+    addDay.addEventListener('click', () => {
+      crewMutate(() => {
+        const last = (c.days || [])[c.days.length - 1];
+        c.days.push({ id: 'cd' + uid(), label: '새 날짜', sub: '', h0: last ? last.h0 : 9, h1: last ? last.h1 : 20 });
+      });
+    });
+    acts.appendChild(addDay);
+    const addTeam = document.createElement('button');
+    addTeam.className = 'mbtn';
+    addTeam.textContent = '＋ 팀';
+    addTeam.addEventListener('click', () => {
+      crewMutate(() => {
+        c.teams.push({ id: 'ct' + uid(), name: '새 팀', color: CREW_COLORS[c.teams.length % CREW_COLORS.length], members: [] });
+      });
+    });
+    acts.appendChild(addTeam);
+  }
+  const close = document.createElement('button');
+  close.className = 'mbtn';
+  close.textContent = '닫기 ✕';
+  close.addEventListener('click', closeCrewPanel);
+  acts.appendChild(close);
+  head.appendChild(acts);
+  crewPanel.appendChild(head);
+  /* 그리드 */
+  const wrap = document.createElement('div');
+  wrap.className = 'crew-scroll';
+  const table = document.createElement('table');
+  table.className = 'crew-table';
+  const days = c.days || [];
+  /* 날짜 헤더 2줄 */
+  const tr1 = document.createElement('tr');
+  tr1.className = 'crew-hd1';
+  tr1.appendChild(Object.assign(document.createElement('th'), { colSpan: 3, className: 'crew-corner' }));
+  days.forEach(d => {
+    const th = document.createElement('th');
+    th.colSpan = Math.max(1, d.h1 - d.h0 + 1);
+    th.className = 'crew-day';
+    const lab = document.createElement('span'); lab.className = 'crew-day-label'; lab.textContent = d.label;
+    const sub = document.createElement('span'); sub.className = 'crew-day-sub'; sub.textContent = d.sub || '';
+    th.append(lab, sub);
+    if (edit) {
+      lab.addEventListener('dblclick', () => crewInlineEdit(lab, () => d.label, v => { d.label = v; }));
+      sub.addEventListener('dblclick', () => crewInlineEdit(sub, () => d.sub || '', v => { d.sub = v; }));
+      const rng = document.createElement('span');
+      rng.className = 'crew-day-rng';
+      const i0 = Object.assign(document.createElement('input'), { type: 'number', min: 0, max: 23, value: d.h0 });
+      const i1 = Object.assign(document.createElement('input'), { type: 'number', min: 0, max: 23, value: d.h1 });
+      [i0, i1].forEach(inp => inp.addEventListener('change', () => {
+        const a = Math.max(0, Math.min(23, +i0.value || 0)), b2 = Math.max(0, Math.min(23, +i1.value || 0));
+        crewMutate(() => { d.h0 = Math.min(a, b2); d.h1 = Math.max(a, b2); });
+      }));
+      const dx = document.createElement('button');
+      dx.className = 'crew-x';
+      dx.textContent = '✕';
+      dx.title = '날짜 삭제';
+      dx.addEventListener('click', () => {
+        if (!confirm('"' + d.label + '" 날짜를 삭제할까요? 해당 날짜의 배정이 모두 지워집니다.')) return;
+        crewMutate(() => {
+          c.days = c.days.filter(x => x.id !== d.id);
+          Object.values(c.marks || {}).forEach(mm => delete mm[d.id]);
+        });
+      });
+      rng.append(i0, '–', i1, dx);
+      th.appendChild(rng);
+    }
+    tr1.appendChild(th);
+  });
+  table.appendChild(tr1);
+  const tr2 = document.createElement('tr');
+  tr2.className = 'crew-hd2';
+  ['팀', '이름', '역할'].forEach((t, i) => {
+    const th = document.createElement('th');
+    th.className = 'crew-left crew-l' + i;
+    th.textContent = t;
+    tr2.appendChild(th);
+  });
+  days.forEach(d => {
+    for (let h = d.h0; h <= d.h1; h++) {
+      const th = document.createElement('th');
+      th.className = 'crew-h';
+      th.textContent = String(h).padStart(2, '0');
+      tr2.appendChild(th);
+    }
+  });
+  table.appendChild(tr2);
+  /* 팀별 인원 행 */
+  (c.teams || []).forEach(team => {
+    const trT = document.createElement('tr');
+    trT.className = 'crew-teamrow';
+    const tdT = document.createElement('td');
+    tdT.colSpan = 3;
+    tdT.className = 'crew-left crew-teamcell';
+    tdT.style.background = team.color;
+    const nm = document.createElement('span');
+    nm.className = 'crew-team-name';
+    nm.textContent = team.name;
+    tdT.appendChild(nm);
+    if (edit) {
+      nm.addEventListener('dblclick', () => crewInlineEdit(nm, () => team.name, v => { team.name = v || team.name; }));
+      const col = document.createElement('input');
+      col.type = 'color';
+      col.value = team.color;
+      col.className = 'crew-teamcolor';
+      col.title = '팀 테마색';
+      col.addEventListener('change', () => crewMutate(() => { team.color = col.value; }));
+      tdT.appendChild(col);
+      const addM = document.createElement('button');
+      addM.className = 'crew-x';
+      addM.textContent = '＋';
+      addM.title = '인원 추가';
+      addM.addEventListener('click', () => crewMutate(() => team.members.push({ id: 'cm' + uid(), name: '이름', role: '' })));
+      tdT.appendChild(addM);
+      const delT = document.createElement('button');
+      delT.className = 'crew-x';
+      delT.textContent = '✕';
+      delT.title = '팀 삭제';
+      delT.addEventListener('click', () => {
+        if (!confirm('"' + team.name + '" 팀을 삭제할까요? 소속 인원과 배정이 지워집니다.')) return;
+        crewMutate(() => {
+          team.members.forEach(m => delete (c.marks || {})[m.id]);
+          c.teams = c.teams.filter(x => x.id !== team.id);
+        });
+      });
+      tdT.appendChild(delT);
+    }
+    trT.appendChild(tdT);
+    const fill = document.createElement('td');
+    fill.colSpan = Math.max(1, days.reduce((a, d) => a + (d.h1 - d.h0 + 1), 0));
+    fill.className = 'crew-teamfill';
+    fill.style.background = team.color + '33';
+    trT.appendChild(fill);
+    table.appendChild(trT);
+    team.members.forEach(mem => {
+      const tr = document.createElement('tr');
+      tr.className = 'crew-mrow';
+      tr.dataset.mid = mem.id;
+      const tdH = document.createElement('td');
+      tdH.className = 'crew-left crew-l0';
+      if (edit) {
+        const hnd = document.createElement('span');
+        hnd.className = 'crew-handle';
+        hnd.textContent = '⠿';
+        hnd.title = '끌어서 팀 이동/순서 변경';
+        hnd.draggable = true;
+        hnd.addEventListener('dragstart', e => {
+          crewDragMem = { memId: mem.id };
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', 'sb-crew'); } catch (err) {}
+        });
+        tdH.appendChild(hnd);
+        const mx = document.createElement('button');
+        mx.className = 'crew-x';
+        mx.textContent = '✕';
+        mx.title = '인원 삭제';
+        mx.addEventListener('click', () => {
+          if (!confirm(mem.name + ' 님을 삭제할까요?')) return;
+          crewMutate(() => {
+            team.members = team.members.filter(x => x.id !== mem.id);
+            delete (c.marks || {})[mem.id];
+          });
+        });
+        tdH.appendChild(mx);
+      }
+      tr.appendChild(tdH);
+      const tdN = document.createElement('td');
+      tdN.className = 'crew-left crew-l1';
+      tdN.textContent = mem.name;
+      if (edit) tdN.addEventListener('dblclick', () => crewInlineEdit(tdN, () => mem.name, v => { mem.name = v || mem.name; }));
+      tr.appendChild(tdN);
+      const tdR = document.createElement('td');
+      tdR.className = 'crew-left crew-l2';
+      tdR.textContent = mem.role || '';
+      if (edit) tdR.addEventListener('dblclick', () => crewInlineEdit(tdR, () => mem.role || '', v => { mem.role = v; }));
+      tr.appendChild(tdR);
+      days.forEach(d => {
+        for (let h = d.h0; h <= d.h1; h++) {
+          const td = document.createElement('td');
+          td.className = 'crew-cell';
+          td.dataset.m = mem.id;
+          td.dataset.d = d.id;
+          td.dataset.h = h;
+          crewApplyCellStyle(td, crewMarkOf(mem.id, d.id, h));
+          tr.appendChild(td);
+        }
+      });
+      table.appendChild(tr);
+    });
+  });
+  wrap.appendChild(table);
+  crewPanel.appendChild(wrap);
+  if (edit) {
+    const hint = document.createElement('div');
+    hint.className = 'crew-hint';
+    hint.textContent = '클릭/드래그로 칠하기 · 단축키 1~8 팀, 9 불가, 0 지우개 · 이름/역할/날짜는 더블클릭으로 수정';
+    crewPanel.appendChild(hint);
+  }
+}
+/* 셀 칠하기 (클릭 + 드래그) */
+crewPanel.addEventListener('pointerdown', e => {
+  const td = e.target.closest ? e.target.closest('td.crew-cell') : null;
+  if (!td || !crewCanEdit()) return;
+  e.preventDefault();
+  crewPainting = true;
+  crewPaintCell(td);
+});
+crewPanel.addEventListener('pointerover', e => {
+  if (!crewPainting) return;
+  const td = e.target.closest ? e.target.closest('td.crew-cell') : null;
+  if (td) crewPaintCell(td);
+});
+window.addEventListener('pointerup', () => { crewPainting = false; });
+/* 인원 드래그: 다른 팀/행 위에 놓아 이동·재배치 */
+let crewDragMem = null;
+crewPanel.addEventListener('dragover', e => {
+  if (!crewDragMem) return;
+  const row = e.target.closest ? e.target.closest('tr.crew-mrow, tr.crew-teamrow') : null;
+  crewPanel.querySelectorAll('.crew-drop').forEach(x => x.classList.remove('crew-drop'));
+  if (!row) return;
+  e.preventDefault();
+  row.classList.add('crew-drop');
+});
+crewPanel.addEventListener('drop', e => {
+  if (!crewDragMem) return;
+  const src = crewDragMem;
+  crewDragMem = null;
+  crewPanel.querySelectorAll('.crew-drop').forEach(x => x.classList.remove('crew-drop'));
+  const row = e.target.closest ? e.target.closest('tr.crew-mrow, tr.crew-teamrow') : null;
+  if (!row) return;
+  e.preventDefault();
+  const c = crewData();
+  let srcTeam = null, mem = null;
+  for (const t of c.teams) {
+    const i = t.members.findIndex(x => x.id === src.memId);
+    if (i >= 0) { srcTeam = t; mem = t.members[i]; break; }
+  }
+  if (!mem) return;
+  crewMutate(() => {
+    srcTeam.members = srcTeam.members.filter(x => x.id !== mem.id);
+    if (row.classList.contains('crew-teamrow')) {
+      const name = row.querySelector('.crew-team-name').textContent;
+      const dst = c.teams.find(t => t.name === name) || srcTeam;
+      dst.members.unshift(mem);
+    } else {
+      const dstId = row.dataset.mid;
+      for (const t of c.teams) {
+        const i = t.members.findIndex(x => x.id === dstId);
+        if (i >= 0) { t.members.splice(i + 1, 0, mem); return; }
+      }
+      srcTeam.members.push(mem);
+    }
+  });
+});
+crewPanel.addEventListener('dragend', () => {
+  crewDragMem = null;
+  crewPanel.querySelectorAll('.crew-drop').forEach(x => x.classList.remove('crew-drop'));
+});
+/* 숫자키 단축키 */
+document.addEventListener('keydown', e => {
+  if (!crewOpen() || !crewCanEdit()) return;
+  const ae = document.activeElement;
+  if (ae && (ae.isContentEditable || /^(INPUT|TEXTAREA)$/.test(ae.tagName))) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!/^[0-9]$/.test(e.key)) return;
+  const c = crewData();
+  if (!c) return;
+  e.preventDefault();
+  const n = +e.key;
+  if (n === 0) crewTool = null;
+  else if (n === 9) crewTool = 'X';
+  else if (c.teams[n - 1]) crewTool = c.teams[n - 1].id;
+  renderCrewPanel();
+});
+
 function setSyncStatus(s) {
   const el = $('#sync-status');
   el.style.display = '';
@@ -4200,14 +4702,52 @@ function mergeSettings(b, l, r) {
   }
   return out;
 }
+/* 인원표(crew) 병합 — 팀/인원은 id 리스트 병합, 마크는 인원×날짜 키 단위 3-way */
+function mergeCrew(b, l, r) {
+  if (!l) return r;
+  if (!r) return l;
+  b = b || {};
+  const out = { ...l };
+  out.teams = mergeById(b.teams || [], l.teams || [], r.teams || [], (bb, ll, rr) => {
+    bb = bb || {};
+    return {
+      ...ll,
+      name: pick3(bb.name, ll.name, rr.name),
+      color: pick3(bb.color, ll.color, rr.color),
+      members: mergeById(bb.members || [], ll.members || [], rr.members || [], (b2, l2, r2) => {
+        b2 = b2 || {};
+        return { ...l2, name: pick3(b2.name, l2.name, r2.name), role: pick3(b2.role, l2.role, r2.role) };
+      })
+    };
+  });
+  out.days = mergeById(b.days || [], l.days || [], r.days || [], (bb, ll, rr) => pick3(bb, ll, rr));
+  const mk = {};
+  const mks = new Set([...Object.keys(b.marks || {}), ...Object.keys(l.marks || {}), ...Object.keys(r.marks || {})]);
+  for (const m of mks) {
+    const bm = (b.marks || {})[m], lm = (l.marks || {})[m], rm = (r.marks || {})[m];
+    const dks = new Set([...Object.keys(bm || {}), ...Object.keys(lm || {}), ...Object.keys(rm || {})]);
+    const dout = {};
+    for (const d of dks) {
+      const v = pick3(bm && bm[d], lm && lm[d], rm && rm[d]);
+      if (v && Object.keys(v).length) dout[d] = v;
+    }
+    if (Object.keys(dout).length) mk[m] = dout;
+  }
+  out.marks = mk;
+  return out;
+}
 function mergeFilmDoc(b, l, r) {
   if (!l) return r;
   if (!r) return l;
   b = b || {};
-  return {
+  const out = {
+    ...l,
     settings: mergeSettings(b.settings, l.settings, r.settings),
     blocks: mergeById(b.blocks, l.blocks, r.blocks, mergeBlock)
   };
+  const crew = mergeCrew(b.crew, l.crew, r.crew);
+  if (crew) out.crew = crew; else delete out.crew;
+  return out;
 }
 function mergeDocs(baseS, localS, remoteS) {
   try {

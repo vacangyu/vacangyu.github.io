@@ -47,6 +47,7 @@
 
 ## 주요 기능 인벤토리 (사용자와 합의된 사양)
 
+- **인원표**: 토프바 '인원표' 버튼 → 전체화면 패널(#crew-panel). 데이터는 작품별 `films[name].crew = {teams:[{id,name,color,members:[{id,name,role}]}], days:[{id,label,sub,h0,h1}], marks:{memberId:{dayId:{hour: teamId|'X'}}}}` — 문서에 저장돼 발행/병합 파이프라인으로 동기화(mergeCrew: 팀/인원 id 병합, 마크는 인원×날짜 키 단위. normalizeFilm·mergeFilmDoc이 crew 필드 보존). 셀: 팀색 채움=확실 가능(타 팀 배정 가능), 빨간 빗금('X')=불가, 빈칸=미정. 편집자만: 클릭/드래그 칠하기, 도구 팔레트+숫자키(1~8 팀, 9 불가, 0 지우개), 팀/인원/날짜 추가·삭제(confirm)·더블클릭 인라인 수정, 팀 컬러픽커, 인원 ⠿ 드래그로 팀 이동/재배치, 시간 범위(h0–h1) 수정. 모든 변경 pushOp(undo)+publishFast. 뷰어는 열람만. 개구리는 최초 오픈 시 PDF 명단·3일차 시드(crewSeedFor), 타 작품은 빈 5팀. 모바일 뷰에선 숨김.
 - **모바일 뷰어(PDF식)**: 뷰어 && 화면폭 ≤760px이면 body.mobileview — 툴바·사이드바·댓글 UI 숨기고 데스크톱과 같은 전체 페이지를 그대로 표시(실시간 편집되는 PDF 보기). 진입 시 페이지 폭을 화면에 맞춤(setZoom fit), 핀치 확대 가능, 하단에 작품 전환 필(#mswitch)만 표시. viewport meta는 진입 시에만 주입. (카드 피드 방식은 폐지)
 - 열 보호: `col.core`(마이그레이션으로 기존 열 전부 true, 새 열은 false) — core 열은 삭제 불가.
 - C#·Next(라벨 기준) 열은 첫 줄 이외 텍스트를 자동 흐림(`transformDim` 모델 변환 → span/.dim-rest, 멱등·인쇄 반영).
