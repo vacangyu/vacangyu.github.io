@@ -226,10 +226,14 @@ body.side-collapsed #sidebar > *{display:none}
 /* ---------- 페이지 ---------- */
 .page{position:relative;background:#fff;box-shadow:0 0 0 1px #e4e4e7,0 2px 8px rgba(0,0,0,.05);width:210mm;height:297mm;padding:var(--pm,10mm);flex:0 0 auto;font-family:var(--doc-font)}
 body.film-frog .cell[data-f="notes"]{font-family:'IBM Plex Mono','Pretendard Variable','Pretendard','Apple SD Gothic Neo',monospace} /* 개구리: Notes = Plex Mono */
-body.film-frog .hcell span{font-size:5.5pt} /* 개구리: 헤더 텍스트 절반 */
-#margin-row{display:none;align-items:center;gap:5px;font-size:12px;color:#3f3f46;padding:6px 10px}
-body.film-frog #margin-row{display:flex}
-#margin-row input{width:38px;border:1px solid #e4e4e7;border-radius:6px;font-size:11.5px;padding:2px 4px;font-family:inherit}
+body.film-frog .hcell span{font-size:var(--hdr-fs,5.5pt)} /* 개구리: 헤더 텍스트(기본 절반), 문서 메뉴에서 조절 */
+body.film-frog tr.hdr td{height:var(--hdr-h,8mm)} /* 개구리: 헤더 행 높이, 하단 그립 드래그로 조절 */
+.hgrip{display:none;position:absolute;left:0;right:0;bottom:-3px;height:6px;cursor:row-resize;z-index:6}
+.hgrip:hover,.hgrip.dragging{background:#7fa8dd}
+body.film-frog:not(.viewer):not(.mobileview) .hcell .hgrip{display:block} /* 높이는 문서 공유 설정 — 편집자만 */
+#margin-row,#hdrfs-row{display:none;align-items:center;gap:5px;font-size:12px;color:#3f3f46;padding:6px 10px}
+body.film-frog #margin-row,body.film-frog #hdrfs-row{display:flex}
+#margin-row input,#hdrfs-row input{width:38px;border:1px solid #e4e4e7;border-radius:6px;font-size:11.5px;padding:2px 4px;font-family:inherit}
 .page.landscape{width:297mm;height:210mm}
 .page .content{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden}
 .page.title-page .content{justify-content:center}
@@ -383,6 +387,9 @@ tr.mrow .mcell{min-height:14mm}
         <button class="pitem" id="b-localfonts" title="이 컴퓨터의 폰트 목록 불러오기 (Chrome/Edge)">로컬 폰트 불러오기</button>
         <div id="margin-row" title="문서 여백(mm): 상 · 우 · 하 · 좌">여백
           <input type="number" id="m-t" min="0" max="40"><input type="number" id="m-r" min="0" max="40"><input type="number" id="m-b" min="0" max="40"><input type="number" id="m-l" min="0" max="40"> mm
+        </div>
+        <div id="hdrfs-row" title="표 헤더 행 글자 크기(pt) — 모든 페이지에 적용">헤더 글자
+          <input type="number" id="hdr-fs" min="3" max="20" step="0.5"> pt
         </div>
       </div>
     </div>
@@ -615,7 +622,8 @@ function isInteracting() {
     !!(typeof colMoveDrag !== 'undefined' && colMoveDrag) ||
     !!(typeof colDrag !== 'undefined' && colDrag) ||
     !!(typeof photoPan !== 'undefined' && photoPan) ||
-    !!(typeof mfigDrag !== 'undefined' && mfigDrag);
+    !!(typeof mfigDrag !== 'undefined' && mfigDrag) ||
+    !!(typeof hdrDrag !== 'undefined' && hdrDrag);
 }
 /* 로컬 모델 리비전 — 발행/원격병합의 비동기 구간 중 변경 감지용.
    스냅숏 이후 modelRev가 움직였다면 그 스냅숏으로 모델을 덮어쓰면 안 된다(유실). */
@@ -649,6 +657,9 @@ function buildBoardTable(block, rows, measure) {
     const sp = document.createElement('span'); sp.textContent = col.label; td.appendChild(sp);
     if (!measure && i < cols.length - 1) {
       const g = document.createElement('div'); g.className = 'grip noprint'; g.dataset.i = i; td.appendChild(g);
+    }
+    if (!measure) {
+      const hg = document.createElement('div'); hg.className = 'hgrip noprint'; td.appendChild(hg);
     }
     hdr.appendChild(td);
   });
@@ -1135,11 +1146,15 @@ function docMargins() {
   const n = (v, d) => { v = +v; return isFinite(v) ? Math.max(0, Math.min(40, v)) : d; };
   return { t: n(m.t, 10), r: n(m.r, 10), b: n(m.b, 10), l: n(m.l, 10) };
 }
+function hdrFsOf() { const v = +doc.settings.hdrFs; return isFinite(v) && v ? Math.max(3, Math.min(20, v)) : 5.5; }
+function hdrHOf() { const v = +doc.settings.hdrH; return isFinite(v) && v ? Math.max(4, Math.min(30, v)) : 8; }
 function applyDocVars() {
   /* 개구리 전용 스타일 분기 (Notes 서체·헤더 축소·여백 UI 등) */
   document.body.classList.toggle('film-frog', currentFilm === '개구리');
   const mg = docMargins();
   document.body.style.setProperty('--pm', mg.t + 'mm ' + mg.r + 'mm ' + mg.b + 'mm ' + mg.l + 'mm');
+  document.body.style.setProperty('--hdr-fs', hdrFsOf() + 'pt');
+  document.body.style.setProperty('--hdr-h', hdrHOf() + 'mm');
   document.body.style.setProperty('--doc-font', doc.settings.font);
   document.body.style.setProperty('--doc-fs', doc.settings.fontSize + 'pt');
   document.body.style.setProperty('--hdr-bg', doc.settings.hdrColor || '#ffffff');
@@ -1166,6 +1181,8 @@ function updatePageStyle() {
     const el = $('#' + id);
     if (el && document.activeElement !== el) el.value = mg2[k];
   });
+  const hf = $('#hdr-fs');
+  if (hf && document.activeElement !== hf) hf.value = hdrFsOf();
 }
 /* 용지 방향 아이콘 (문서를 둘러싼 회전 화살표) */
 const ORI_ICON_P = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="6.5" width="10" height="14" rx="1.5"/><path d="M13 3h3.5a4 4 0 0 1 4 4v4"/><polyline points="15.4 1 13 3 15.4 5"/></svg>';
@@ -3084,7 +3101,15 @@ pagesEl.addEventListener('drop', e => {
 
 /* --- 열 너비 드래그 (전 페이지 공통) --- */
 let colDrag = null;
+let hdrDrag = null;
 pagesEl.addEventListener('pointerdown', e => {
+  const hg = e.target.closest ? e.target.closest('.hgrip') : null;
+  if (hg && cloudRole !== 'viewer') {
+    e.preventDefault();
+    hdrDrag = { startY: e.clientY, h0: hdrHOf(), grip: hg, h: hdrHOf() };
+    hg.classList.add('dragging');
+    return;
+  }
   const g = e.target.closest ? e.target.closest('.grip') : null; /* 열 너비는 뷰어도 조정 가능(개인 설정) */
   if (!g) return;
   e.preventDefault();
@@ -3093,6 +3118,13 @@ pagesEl.addEventListener('pointerdown', e => {
   g.classList.add('dragging');
 });
 window.addEventListener('pointermove', e => {
+  if (hdrDrag) {
+    /* 라이브 미리보기 — CSS 변수라 모든 페이지의 헤더가 동시에 움직인다 */
+    const h = Math.max(4, Math.min(30, hdrDrag.h0 + (e.clientY - hdrDrag.startY) / zoomFactor() / PXMM));
+    hdrDrag.h = Math.round(h * 10) / 10;
+    document.body.style.setProperty('--hdr-h', hdrDrag.h + 'mm');
+    return;
+  }
   if (!colDrag) return;
   const d = (e.clientX - colDrag.startX) / colDrag.w * 100;
   const i = colDrag.i;
@@ -3108,6 +3140,15 @@ window.addEventListener('pointermove', e => {
   $$('#pages col').forEach(c => { c.style.width = myPct[+c.dataset.i] + '%'; });
 });
 window.addEventListener('pointerup', () => {
+  if (hdrDrag) {
+    hdrDrag.grip.classList.remove('dragging');
+    doc.settings.hdrH = hdrDrag.h;
+    hdrDrag = null;
+    markDirty(); /* 헤더 높이는 문서 공유 설정 */
+    applyDocVars();
+    renderAll(false); /* 헤더 높이 변화 → 재페이지네이션 */
+    return;
+  }
   if (!colDrag) return;
   colDrag.grip.classList.remove('dragging');
   colDrag = null;
@@ -3273,6 +3314,13 @@ $('#b-localfonts').addEventListener('click', loadLocalFonts);
     applyDocVars();
     renderAll(false);
   });
+});
+$('#hdr-fs').addEventListener('change', () => {
+  const v = Math.max(3, Math.min(20, +$('#hdr-fs').value || 5.5));
+  doc.settings.hdrFs = v;
+  markDirty();
+  applyDocVars();
+  renderAll(false); /* 헤더 높이가 변할 수 있어 재페이지네이션 */
 });
 $('#b-view-setdefault').addEventListener('click', () => {
   doc.settings.orientation = effOri();
