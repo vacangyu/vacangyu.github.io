@@ -81,7 +81,7 @@
 ## 규칙·주의사항
 
 - **모든 작업 시작 시 `git status` 확인 후 `git pull --ff-only`로 원격과 동기화하고 시작할 것.**
-- **단일 파일 유지.** 외부 의존성 추가 금지(Firebase SDK CDN 제외). 새 기능도 storyboard.html 안에.
+- **단일 파일 유지.** 외부 의존성 추가 금지(Firebase SDK CDN, 웹폰트 CDN — Pretendard(jsdelivr)·IBM Plex Mono(Google Fonts) — 제외). 새 기능도 storyboard.html 안에. Plex Mono의 한글 폴백은 Pretendard.
 - 인쇄 충실도가 핵심: 페이지는 mm 단위, `@page{size:A4 …;margin:0}`, 화면 전용 요소는 `.noprint`. 페이지네이션 수치를 바꾸면 인쇄 결과를 반드시 검증(Playwright `page.pdf()`로 A4 크기·페이지 수 확인해 왔음).
 - 한국어 IME: composition 중 재렌더 금지(기존 로직 유지). 캐럿 복원은 텍스트 오프셋 기반이라 텍스트를 바꾸지 않는 DOM 변형은 안전.
 - 뷰어 모드 가드: 새 상호작용 핸들러를 추가하면 반드시 `isViewer()` 가드와 `.eo`(또는 viewer CSS 숨김)를 함께 고려할 것.
