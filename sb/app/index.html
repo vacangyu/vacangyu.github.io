@@ -224,7 +224,12 @@ body.side-collapsed #sidebar > *{display:none}
 #pages{position:relative;width:max-content;margin:0 auto;padding:28px;display:flex;flex-direction:column;gap:26px}
 
 /* ---------- 페이지 ---------- */
-.page{position:relative;background:#fff;box-shadow:0 0 0 1px #e4e4e7,0 2px 8px rgba(0,0,0,.05);width:210mm;height:297mm;padding:10mm;flex:0 0 auto;font-family:var(--doc-font)}
+.page{position:relative;background:#fff;box-shadow:0 0 0 1px #e4e4e7,0 2px 8px rgba(0,0,0,.05);width:210mm;height:297mm;padding:var(--pm,10mm);flex:0 0 auto;font-family:var(--doc-font)}
+body.film-frog .cell[data-f="notes"]{font-family:'IBM Plex Mono','Pretendard Variable','Pretendard','Apple SD Gothic Neo',monospace} /* 개구리: Notes = Plex Mono */
+body.film-frog .hcell span{font-size:5.5pt} /* 개구리: 헤더 텍스트 절반 */
+#margin-row{display:none;align-items:center;gap:5px;font-size:12px;color:#3f3f46;padding:6px 10px}
+body.film-frog #margin-row{display:flex}
+#margin-row input{width:38px;border:1px solid #e4e4e7;border-radius:6px;font-size:11.5px;padding:2px 4px;font-family:inherit}
 .page.landscape{width:297mm;height:210mm}
 .page .content{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden}
 .page.title-page .content{justify-content:center}
@@ -376,6 +381,9 @@ tr.mrow .mcell{min-height:14mm}
         <button class="pitem" id="b-num" title="페이지 번호 표시/숨김">페이지 번호</button>
         <label class="pitem" title="표 헤더 행 배경색">헤더 색<input type="color" id="hdr-color" value="#ffffff" style="width:24px;height:18px;border:none;padding:0;background:none;cursor:pointer"></label>
         <button class="pitem" id="b-localfonts" title="이 컴퓨터의 폰트 목록 불러오기 (Chrome/Edge)">로컬 폰트 불러오기</button>
+        <div id="margin-row" title="문서 여백(mm): 상 · 우 · 하 · 좌">여백
+          <input type="number" id="m-t" min="0" max="40"><input type="number" id="m-r" min="0" max="40"><input type="number" id="m-b" min="0" max="40"><input type="number" id="m-l" min="0" max="40"> mm
+        </div>
       </div>
     </div>
     <button class="mbtn" id="b-crew-table" title="팀별 인원 가용 시간표">인원표</button>
@@ -524,7 +532,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-23 15:05";
+const BUILD_ID = "2026-08-23 15:23";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -805,14 +813,15 @@ function measureBoard(block) {
   const m = $('#measure');
   m.innerHTML = '';
   const wrap = document.createElement('div');
-  wrap.style.width = (w - 2 * MARGIN) + 'mm';
+  const mg = docMargins();
+  wrap.style.width = (w - mg.l - mg.r) + 'mm';
   wrap.appendChild(buildBoardTable(block, block.cuts.map(c => ({ cut: c })), true));
   m.appendChild(wrap);
   const trs = wrap.querySelectorAll('tr');
   const hdrH = trs[0].getBoundingClientRect().height;
   const cutHs = [...trs].slice(1).map(tr => tr.getBoundingClientRect().height);
   m.innerHTML = '';
-  return { hdrH, cutHs, availH: (h - 2 * MARGIN) * PXMM - 2 };
+  return { hdrH, cutHs, availH: (h - mg.t - mg.b) * PXMM - 2 };
 }
 
 function computePages() {
@@ -1129,7 +1138,16 @@ function buildThumbs() {
 const scheduleThumbs = debounce(buildThumbs, 500);
 
 /* ---------- 문서 설정 반영 ---------- */
+function docMargins() {
+  const m = doc.settings.margins || {};
+  const n = (v, d) => { v = +v; return isFinite(v) ? Math.max(0, Math.min(40, v)) : d; };
+  return { t: n(m.t, 10), r: n(m.r, 10), b: n(m.b, 10), l: n(m.l, 10) };
+}
 function applyDocVars() {
+  /* 개구리 전용 스타일 분기 (Notes 서체·헤더 축소·여백 UI 등) */
+  document.body.classList.toggle('film-frog', currentFilm === '개구리');
+  const mg = docMargins();
+  document.body.style.setProperty('--pm', mg.t + 'mm ' + mg.r + 'mm ' + mg.b + 'mm ' + mg.l + 'mm');
   document.body.style.setProperty('--doc-font', doc.settings.font);
   document.body.style.setProperty('--doc-fs', doc.settings.fontSize + 'pt');
   document.body.style.setProperty('--hdr-bg', doc.settings.hdrColor || '#ffffff');
@@ -1151,6 +1169,11 @@ function updatePageStyle() {
   if (rc) rc.textContent = doc.settings.photoMode === 'contain' ? '원본' : (doc.settings.videoRatio || '3:2');
   renderRatioPop();
   renderCastPop();
+  const mg2 = docMargins();
+  [['m-t', 't'], ['m-r', 'r'], ['m-b', 'b'], ['m-l', 'l']].forEach(([id, k]) => {
+    const el = $('#' + id);
+    if (el && document.activeElement !== el) el.value = mg2[k];
+  });
 }
 /* 용지 방향 아이콘 (문서를 둘러싼 회전 화살표) */
 const ORI_ICON_P = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="6.5" width="10" height="14" rx="1.5"/><path d="M13 3h3.5a4 4 0 0 1 4 4v4"/><polyline points="15.4 1 13 3 15.4 5"/></svg>';
@@ -3248,6 +3271,17 @@ $('#b-autohl').addEventListener('click', () => {
 });
 
 $('#b-localfonts').addEventListener('click', loadLocalFonts);
+['m-t', 'm-r', 'm-b', 'm-l'].forEach((id, i) => {
+  $('#' + id).addEventListener('change', () => {
+    const keys = ['t', 'r', 'b', 'l'];
+    const cur = docMargins();
+    cur[keys[i]] = Math.max(0, Math.min(40, +$('#' + id).value || 0));
+    doc.settings.margins = cur;
+    markDirty();
+    applyDocVars();
+    renderAll(false);
+  });
+});
 $('#b-view-setdefault').addEventListener('click', () => {
   doc.settings.orientation = effOri();
   doc.settings.colPct = [...effColPct()];

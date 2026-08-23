@@ -67,6 +67,8 @@
 - **프로필**: RTDB `profiles/{uid}` = {name, color, photo(96px JPEG dataURL)} — 토프바 내 아바타 클릭 → 모달. 이름은 presence에, 색은 아바타/커서/캐럿/선택/채팅에, 사진 없으면 첫 글자.
 - **개인별 보기 설정**: 용지 방향·열 너비는 사용자(편집자·뷰어)마다 로컬(localStorage `sb_vp`, 작품별) — `effOri()`/`effColPct()`로 읽고, 문서의 settings 값은 기본값. 열 구조 변경(추가/삭제/이동)은 공유(문서). 팔로우는 레이아웃이 달라도 같은 셀에 도착하도록 presence에 뷰포트 상단 셀 앵커(`a:{cut|block, frac}`)를 실어 `anchorWantTop()`으로 해석(실패 시 ty 근사 폴백).
 - 대사 하이라이트 세그먼테이션은 모든 중첩 깊이의 div/p를 컨테이너로 처리(블록을 span으로 감싸면 배경이 안 보이는 버그 수정, 2026-08).
+- A4 여백: 기본 10mm, `doc.settings.margins = {t,r,b,l}`(mm, 0~40) — `docMargins()`로 읽어 `--pm` CSS 변수(.page padding)와 measureBoard(가용 폭/높이) 양쪽에 반영되므로 여백을 바꾸면 페이지네이션도 재계산. 문서 메뉴의 #margin-row(상·우·하·좌 입력)는 **개구리 전용 UI**(body.film-frog일 때만 표시)지만 저장 자체는 문서 공통 구조.
+- **개구리 전용 스타일**(body.film-frog): Notes 셀 서체 IBM Plex Mono(한글 폴백 Pretendard), 헤더행(.hcell span) 글자 5.5pt(기본 11pt의 절반).
 - A4(상하좌우 10mm 여백), **동적 컬럼** 표 — 기본 5열(S#, C#, Video, Context, Notes), `settings.cols` = `{id, label, kind:'text'|'video'}` 배열, `colPct`와 인덱스 동기. 헤더 셀 호버 시 열 도구(#coltools, Win8 스타일)로 열 이동(◀▶)·오른쪽에 새 텍스트 열 추가(＋, prompt로 이름)·삭제(✕, confirm — Video 열은 삭제 불가, 최소 2열). 사용자 열 데이터는 cut[colId]에 저장(삭제해도 데이터는 남음), 클래스 c-x. S#/C# 열은 슬라이스 시 첫 조각에만 표시되는 라벨 열. 표는 상단 정렬·좌우 중앙. 헤더 행은 모든 페이지 반복, 배경색 선택 가능(문서 메뉴). 페이지 번호 토글.
 - 사진 붙여넣기 경로: clipboardData.files → items(kind=file) 폴백 → HTML `<img>` 다운로드 → **비동기 클립보드(navigator.clipboard.read, 1.5초 제한)** — 피그마 등 paste 이벤트에 비트맵이 안 실리는 앱 대응. 피그마 벡터(figmeta/figclip)만 있으면 "Copy as PNG" 안내 토스트.
 - 빌드 확인: `BUILD_ID`(build.mjs가 KST 타임스탬프 주입)를 로드 시 우상단 #build-toast로 4.5초 표시. **자동 갱신**: `/sb/version.txt`(수십 바이트)를 로드+2.5초·탭 복귀·10분 주기로 폴링(?t= CDN 캐시 우회) — 새 빌드면 saveHandoff()로 현재 문서를 IndexedDB에 저장 후 `&su=1`로 무감지 리로드. su 부트는 클라우드 도착 전이면 핸드오프 문서를 즉시 그려 스피너 없이 이어 보기(cloudDocArrived 게이트). 미저장/조합/드래그 중엔 연기했다가 발행 성공 직후 갱신. sessionStorage 가드로 빌드당 1회.
@@ -81,6 +83,7 @@
 ## 규칙·주의사항
 
 - **모든 작업 시작 시 `git status` 확인 후 `git pull --ff-only`로 원격과 동기화하고 시작할 것.**
+- **2026-08-23부터 신규 변경·기능은 개구리(/sb/2)에만 적용** — `body.film-frog` 클래스(applyDocVars에서 `currentFilm === '개구리'` 토글)로 CSS 분기하거나 문서별 settings 사용. 전 작품 공통 변경이 필요하면 사용자에게 먼저 확인.
 - **단일 파일 유지.** 외부 의존성 추가 금지(Firebase SDK CDN, 웹폰트 CDN — Pretendard(jsdelivr)·IBM Plex Mono(Google Fonts) — 제외). 새 기능도 storyboard.html 안에. Plex Mono의 한글 폴백은 Pretendard.
 - 인쇄 충실도가 핵심: 페이지는 mm 단위, `@page{size:A4 …;margin:0}`, 화면 전용 요소는 `.noprint`. 페이지네이션 수치를 바꾸면 인쇄 결과를 반드시 검증(Playwright `page.pdf()`로 A4 크기·페이지 수 확인해 왔음).
 - 한국어 IME: composition 중 재렌더 금지(기존 로직 유지). 캐럿 복원은 텍스트 오프셋 기반이라 텍스트를 바꾸지 않는 DOM 변형은 안전.
