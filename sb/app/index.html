@@ -522,7 +522,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-19 20:19";
+const BUILD_ID = "2026-08-23 14:47";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -974,6 +974,16 @@ function nodeByPathIn(cell, path) {
   }
   return n;
 }
+function capCaretPoint(cell, node, offset) {
+  try {
+    return {
+      off: lineAwareOffset(cell, node, offset),
+      path: nodePathIn(cell, node),
+      poff: offset,
+      ptype: node.nodeType
+    };
+  } catch (e) { return null; }
+}
 function captureCaret() {
   const sel = getSelection();
   if (!sel || !sel.rangeCount || !sel.focusNode) return null;
@@ -984,37 +994,43 @@ function captureCaret() {
   const blk = cell.closest('.tp-inner');
   const key = { f: cell.dataset.f, cut: tr ? tr.dataset.cutId : null, block: blk ? blk.dataset.blockId : null };
   const nth = [...pagesEl.querySelectorAll(caretSelector(key))].indexOf(cell);
-  let off = 0, path = null, poff = 0, ptype = 0;
-  try {
-    off = lineAwareOffset(cell, sel.focusNode, sel.focusOffset);
-    path = nodePathIn(cell, sel.focusNode);
-    poff = sel.focusOffset;
-    ptype = sel.focusNode.nodeType;
-  } catch (e) {}
-  return { key, off, nth, path, poff, ptype };
+  const fpt = capCaretPoint(cell, sel.focusNode, sel.focusOffset) || {};
+  /* 드래그로 잡은 선택 영역 보존: 같은 셀 안이면 anchor(시작점)도 함께 저장 —
+     포커스만 저장하면 재렌더 때마다 선택이 캐럿으로 붕괴된다 */
+  let apt = null;
+  if (!sel.isCollapsed && sel.anchorNode && cell.contains(sel.anchorNode)) {
+    apt = capCaretPoint(cell, sel.anchorNode, sel.anchorOffset);
+  }
+  return { key, nth, off: fpt.off || 0, path: fpt.path, poff: fpt.poff || 0, ptype: fpt.ptype || 0, a: apt };
+}
+function resolveCaretPoint(cell, pt) {
+  if (!pt) return null;
+  if (pt.path) {
+    const n = nodeByPathIn(cell, pt.path);
+    if (n && n.nodeType === pt.ptype && (n.nodeType !== 3 || pt.poff <= n.length)) return { node: n, off: pt.poff };
+  }
+  const r2 = lineAwarePlace(cell, pt.off || 0);
+  return r2 ? { node: r2.node, off: r2.off } : null;
 }
 function restoreCaret(cap) {
   if (!cap) return;
   const list = [...pagesEl.querySelectorAll(caretSelector(cap.key))];
   const cell = list[Math.min(Math.max(cap.nth || 0, 0), list.length - 1)];
   if (!cell) return;
-  let node = null, off = 0;
-  /* 1순위: DOM 경로 (노드 타입까지 일치할 때만) */
-  if (cap.path) {
-    const n = nodeByPathIn(cell, cap.path);
-    if (n && n.nodeType === cap.ptype && (n.nodeType !== 3 || cap.poff <= n.length)) { node = n; off = cap.poff; }
-  }
-  /* 2순위: 줄바꿈 인지 오프셋 */
-  if (!node) {
-    const r2 = lineAwarePlace(cell, cap.off || 0);
-    if (r2) { node = r2.node; off = r2.off; }
-  }
+  const fpt = resolveCaretPoint(cell, cap);
+  const apt = cap.a ? resolveCaretPoint(cell, cap.a) : null;
   try {
-    const sel = getSelection(), r = document.createRange();
-    if (node) r.setStart(node, off);
-    else { r.selectNodeContents(cell); r.collapse(false); }
-    r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
+    const sel = getSelection();
+    if (fpt && apt) {
+      /* 선택 영역 복원 (방향 포함: base=anchor, extent=focus) */
+      sel.setBaseAndExtent(apt.node, apt.off, fpt.node, fpt.off);
+    } else {
+      const r = document.createRange();
+      if (fpt) r.setStart(fpt.node, fpt.off);
+      else { r.selectNodeContents(cell); r.collapse(false); }
+      r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
     if (document.activeElement !== cell) cell.focus();
   } catch (e) {}
 }
