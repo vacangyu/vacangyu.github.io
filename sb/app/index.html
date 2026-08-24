@@ -233,6 +233,7 @@ body.film-frog tr.hdr td{height:var(--hdr-h,8mm)} /* 개구리: 헤더 행 높�
 body.film-frog:not(.viewer):not(.mobileview) .hcell .hgrip{display:block} /* 높이는 문서 공유 설정 — 편집자만 */
 #margin-row,#hdrfs-row{display:none;align-items:center;gap:5px;font-size:12px;color:#3f3f46;padding:6px 10px}
 body.film-frog #margin-row,body.film-frog #hdrfs-row{display:flex}
+body:not(.film-frog) #b-shootpdf{display:none !important}
 #margin-row input,#hdrfs-row input{width:38px;border:1px solid #e4e4e7;border-radius:6px;font-size:11.5px;padding:2px 4px;font-family:inherit}
 .page.landscape{width:297mm;height:210mm}
 .page .content{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden}
@@ -374,6 +375,7 @@ tr.mrow .mcell{min-height:14mm}
         <button class="pitem eo" id="b-open">열기…</button>
         <button class="pitem eo" id="b-save">저장<span class="kbd">⌘S</span></button>
         <button class="pitem" id="b-pdf">PDF 내보내기</button>
+        <button class="pitem" id="b-shootpdf" title="Next 열의 컷 번호를 따라 씬 내부 순서만 촬영 순서로 재배열해 인쇄합니다 (문서는 바뀌지 않음)">촬영 순서 PDF</button>
         <button class="pitem eo" id="b-export" title="모든 작품의 표(열·행)·텍스트·사진을 포함한 전체 데이터를 JSON 파일로 내려받습니다 — 열기…로 복원 가능">박광규 제출용 백업 내보내기</button>
         <button class="pitem eo" id="b-backup" title="이 기기에 30초 간격으로 저장된 최근 20개 스냅숏 중 하나로 복구">로컬 백업 복구…</button>
         <div class="pop-build" id="build-info"></div>
@@ -539,7 +541,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-23 18:46";
+const BUILD_ID = "2026-08-25 02:49";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -631,7 +633,8 @@ function isInteracting() {
     !!(typeof colDrag !== 'undefined' && colDrag) ||
     !!(typeof photoPan !== 'undefined' && photoPan) ||
     !!(typeof mfigDrag !== 'undefined' && mfigDrag) ||
-    !!(typeof hdrDrag !== 'undefined' && hdrDrag);
+    !!(typeof hdrDrag !== 'undefined' && hdrDrag) ||
+    !!(typeof printSwap !== 'undefined' && printSwap);
 }
 /* 로컬 모델 리비전 — 발행/원격병합의 비동기 구간 중 변경 감지용.
    스냅숏 이후 modelRev가 움직였다면 그 스냅숏으로 모델을 덮어쓰면 안 된다(유실). */
@@ -1498,6 +1501,66 @@ function dimColIds() {
   return docCols()
     .filter(col => col.kind === 'text' && (col.id === 'c' || /^next$/i.test((col.label || '').trim())))
     .map(col => col.id);
+}
+/* ---------- 촬영 순서 PDF (개구리 전용) ----------
+   Next 열의 숫자 = 같은 씬에서 다음에 찍을 컷 번호(C#). 이 그래프를 따라
+   씬 내부 순서만 촬영 순서로 재배열한 사본을 만들어 인쇄한다(모델 불변). */
+function nextColId() {
+  const col = docCols().find(c => c.kind === 'text' && /^next$/i.test((c.label || '').trim()));
+  return col ? col.id : null;
+}
+function normCutNo(v) { return String(v || '').replace(/\s+/g, '').toUpperCase(); }
+function parseNextRefs(html) {
+  return (textOf(html).match(/\d+(?:-[A-Za-z가-힣0-9]+)?/g) || []).map(normCutNo);
+}
+function shootOrderCuts(cuts, nid) {
+  /* 시작점 = 씬 안에서 아무도 Next로 참조하지 않는 컷(문서 순서 우선) —
+     보통 1컷이고, 씬3처럼 3컷을 먼저 찍으면 3컷이 자동으로 뿌리가 된다.
+     한 셀에 번호가 여러 개면 그 순서대로 이어 찍고, 도달 못 한 컷은 원래 순서로 뒤에. */
+  const byNo = new Map();
+  cuts.forEach(c => { const k = normCutNo(textOf(c.c)); if (k && !byNo.has(k)) byNo.set(k, c); });
+  const refs = new Map(cuts.map(c => [c.id, parseNextRefs(c[nid]).map(k => byNo.get(k)).filter(x => x && x !== c)]));
+  const referenced = new Set();
+  refs.forEach(list => list.forEach(c => referenced.add(c.id)));
+  let roots = cuts.filter(c => !referenced.has(c.id));
+  if (!roots.length && cuts.length) roots = [cuts[0]]; /* 전부 참조(순환)면 첫 컷부터 */
+  const order = [], seen = new Set(), queue = [...roots];
+  while (queue.length) {
+    const c = queue.shift();
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    order.push(c);
+    queue.push(...(refs.get(c.id) || []));
+  }
+  cuts.forEach(c => { if (!seen.has(c.id)) order.push(c); });
+  return order;
+}
+function shootOrderBlocks() {
+  const nid = nextColId();
+  if (!nid) return null;
+  return doc.blocks.map(b => {
+    if (b.type !== 'board') return b;
+    /* 씬 그룹: 비어 있지 않은 S#가 이전 값과 달라지는 지점에서 새 그룹 시작 */
+    const groups = [];
+    let curS = null;
+    b.cuts.forEach(c => {
+      const sv = textOf(c.s);
+      if (!groups.length || (sv && curS !== null && sv !== curS)) groups.push([]);
+      if (sv) curS = sv;
+      groups[groups.length - 1].push(c);
+    });
+    const out = [];
+    for (const g of groups) {
+      const merged = g.map((c, i) => c.merged ? [i, c] : null).filter(Boolean);
+      const plain = g.filter(c => !c.merged);
+      const ordered = shootOrderCuts(plain, nid).map(c => ({ ...c }));
+      const sVals = plain.map(c => c.s);
+      ordered.forEach((c, i) => { c.s = sVals[i]; }); /* S# 라벨은 행 위치에 남김 — 씬 표기가 중간으로 안 끌려가게 */
+      merged.forEach(([i, c]) => ordered.splice(Math.min(i, ordered.length), 0, c)); /* 합쳐진 메모 행은 제자리 고정 */
+      out.push(...ordered);
+    }
+    return { ...b, cuts: out };
+  });
 }
 /* 타이핑 즉시(재렌더 전) 흐림 반영 — 캐럿에 안전한 블록(div/p) 클래스 토글만 수행,
    <br> 줄의 인라인 감싸기는 다음 전체 변환(transformDim)이 처리 */
@@ -3443,6 +3506,23 @@ $('#b-save').addEventListener('click', saveDoc);
 $('#b-pdf').addEventListener('click', () => {
   toast('대상: PDF로 저장 · 여백: 없음 · 배경 그래픽: 켬');
   setTimeout(() => window.print(), 350);
+});
+let printSwap = null; /* 촬영 순서 인쇄 중 원본 blocks 보관 — isInteracting에 포함되어 원격 병합 연기 */
+$('#b-shootpdf').addEventListener('click', () => {
+  const alt = shootOrderBlocks();
+  if (!alt) { toast('Next 열을 찾을 수 없습니다'); return; }
+  printSwap = doc.blocks;
+  doc.blocks = alt;
+  renderAll(false);
+  toast('촬영 순서로 재배열 · 대상: PDF로 저장 · 여백: 없음 · 배경 그래픽: 켬');
+  setTimeout(() => {
+    try { window.print(); }
+    finally {
+      doc.blocks = printSwap;
+      printSwap = null;
+      renderAll(false);
+    }
+  }, 400);
 });
 $('#b-export').addEventListener('click', exportBackupFile);
 $('#b-backup').addEventListener('click', restoreBackupUI);
