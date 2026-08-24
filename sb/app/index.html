@@ -541,7 +541,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-25 02:53";
+const BUILD_ID = "2026-08-25 03:01";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -1522,18 +1522,28 @@ function shootOrderCuts(cuts, nid) {
   const byNo = new Map();
   /* 컷 번호도 첫 숫자 덩어리 기준으로 색인 — C#가 "8-A"여도 "8"로 참조 가능(문서 순서 우선) */
   cuts.forEach(c => { const k = normCutNo((textOf(c.c).match(/\d+/) || [])[0]); if (k && !byNo.has(k)) byNo.set(k, c); });
-  const refs = new Map(cuts.map(c => [c.id, parseNextRefs(c[nid]).map(k => byNo.get(k)).filter(x => x && x !== c)]));
+  const refs = new Map(cuts.map(c => {
+    let list = parseNextRefs(c[nid]).map(k => byNo.get(k)).filter(Boolean);
+    /* 셀에 자기 번호가 포함된 시퀀스 표기("1 7-9-11"을 컷 7이 들고 있는 식)면
+       자기 뒤의 번호들만 후속 컷 — 앞 번호는 선행 컷이므로 참조로 세지 않는다 */
+    const selfIx = list.indexOf(c);
+    if (selfIx >= 0) list = list.slice(selfIx + 1);
+    return [c.id, list.filter(x => x !== c)];
+  }));
   const referenced = new Set();
   refs.forEach(list => list.forEach(c => referenced.add(c.id)));
   let roots = cuts.filter(c => !referenced.has(c.id));
   if (!roots.length && cuts.length) roots = [cuts[0]]; /* 전부 참조(순환)면 첫 컷부터 */
-  const order = [], seen = new Set(), queue = [...roots];
-  while (queue.length) {
-    const c = queue.shift();
-    if (seen.has(c.id)) continue;
-    seen.add(c.id);
-    order.push(c);
-    queue.push(...(refs.get(c.id) || []));
+  const order = [], seen = new Set();
+  for (const root of roots) { /* 시작점이 여럿이면 문서 순서대로 하나씩 끝까지 순회 */
+    const queue = [root];
+    while (queue.length) {
+      const c = queue.shift();
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      order.push(c);
+      queue.push(...(refs.get(c.id) || []));
+    }
   }
   cuts.forEach(c => { if (!seen.has(c.id)) order.push(c); });
   return order;
