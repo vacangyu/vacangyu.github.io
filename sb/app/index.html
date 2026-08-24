@@ -541,7 +541,7 @@ const FIREBASE_CONFIG = {
   "appId": "1:311253229336:web:877bd0e1057a304807086d"
 };
 const BOARD_ID = 'main';
-const BUILD_ID = "2026-08-25 02:49";
+const BUILD_ID = "2026-08-25 02:53";
 /* ============================================================
    스토리보드 메이커 — 단일 파일 웹앱
    문서 모델: { settings, blocks[] }
@@ -1509,16 +1509,19 @@ function nextColId() {
   const col = docCols().find(c => c.kind === 'text' && /^next$/i.test((c.label || '').trim()));
   return col ? col.id : null;
 }
-function normCutNo(v) { return String(v || '').replace(/\s+/g, '').toUpperCase(); }
+function normCutNo(v) { const n = parseInt(v, 10); return isFinite(n) ? String(n) : ''; }
 function parseNextRefs(html) {
-  return (textOf(html).match(/\d+(?:-[A-Za-z가-힣0-9]+)?/g) || []).map(normCutNo);
+  /* 숫자가 아닌 모든 문자(공백·-·~·쉼표 등)는 단순 구분자 — 숫자 덩어리를 적힌 순서대로.
+     예: "1-4 14" → 1, 4, 14 · "1~3" → 1, 3 (범위 전개 없음) */
+  return (textOf(html).match(/\d+/g) || []).map(normCutNo);
 }
 function shootOrderCuts(cuts, nid) {
   /* 시작점 = 씬 안에서 아무도 Next로 참조하지 않는 컷(문서 순서 우선) —
      보통 1컷이고, 씬3처럼 3컷을 먼저 찍으면 3컷이 자동으로 뿌리가 된다.
      한 셀에 번호가 여러 개면 그 순서대로 이어 찍고, 도달 못 한 컷은 원래 순서로 뒤에. */
   const byNo = new Map();
-  cuts.forEach(c => { const k = normCutNo(textOf(c.c)); if (k && !byNo.has(k)) byNo.set(k, c); });
+  /* 컷 번호도 첫 숫자 덩어리 기준으로 색인 — C#가 "8-A"여도 "8"로 참조 가능(문서 순서 우선) */
+  cuts.forEach(c => { const k = normCutNo((textOf(c.c).match(/\d+/) || [])[0]); if (k && !byNo.has(k)) byNo.set(k, c); });
   const refs = new Map(cuts.map(c => [c.id, parseNextRefs(c[nid]).map(k => byNo.get(k)).filter(x => x && x !== c)]));
   const referenced = new Set();
   refs.forEach(list => list.forEach(c => referenced.add(c.id)));
